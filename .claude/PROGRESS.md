@@ -3,7 +3,7 @@
 Append-only. Date every entry. Record failures as loudly as successes.
 If a session dies mid-build, the next one resumes from this file alone.
 
-**Current status:** `M0 not started` — plan approved 2026-10-31, persistence layer created.
+**Current status:** `M0 step 2 complete` — basmala segmented, corpus build + 35 tests green.
 
 ---
 
@@ -42,13 +42,39 @@ If a session dies mid-build, the next one resumes from this file alone.
 **Next action**
 - M0 step 2: basmala segmentation — split into a `basmala` field, index once as a pseudo-document, add the three tests.
 
+## 2026-10-31 — M0 step 2 complete: basmala segmented
+
+**Done**
+- `pipeline/` created with Node 24 native TypeScript — **zero dependencies, no build step**.
+  - `lib/normalize.ts` — one canonical search alphabet (Arabic base letters), Arabic/Persian folding, mark stripping, ZWNJ dual forms, digit folding, script detection.
+  - `lib/basmala.ts` — 4-token prefix split, lossless, raw bytes preserved.
+  - `build-corpus.ts` — verifies the hash before parsing, then asserts 6,236 verses / 114 surahs / contiguous numbering / surah-ayah counts vs metadata / 113 basmala verses / 28-line copyright block. Emits `data/build/corpus.json` (5.7 MB, gitignored).
+- Corpus records now carry `basmala`, `body`, `bodyNorm`, `basmalaIsWholeVerse` **alongside** unmodified `arabic`.
+- **35 tests green** (`pnpm test`).
+
+**Design decision made during the build**
+- The FTS index must use **`bodyNorm`**, not `arabicNorm`. Using the whole verse would index the basmala 112 extra times and inflate the document frequency of الله/الرحمن/الرحيم — the three most common words in the corpus — corrupting BM25 where it matters most. A test now guards this: no verse body may *start with* the basmala key.
+- 1:1's `bodyNorm` is empty on purpose: its entire content is carried by the single `basmala` pseudo-document, which points at 1:1. No duplication, and a basmala query still resolves to 1:1.
+
+**Broke / would have broken**
+- First test run: 2 failures, **both test bugs, not build bugs**.
+  - Expected prefixes on surahs 1–114 minus 9; correct set is **2–114 minus 9** — surah 1 is excluded precisely because its basmala is a whole verse.
+  - A literal-diacritics assertion on 2:255 failed because the source spells `إِلَـٰهَ` **with a tatweel**. Rewrote it to compare on the normalized key. Lesson: never assert on corpus diacritics literally.
+- `joinedVariants` initially stripped ZWNJ before varying it, collapsing both forms into one and silently defeating the function. Caught by its own gold test; fixed.
+
+**Still open from this step**
+- The plan's **translation-extent** test (Arabic words ⊆ translation coverage) is *not* written yet — it needs translations, which arrive in step 3. The Arabic-side guarantee is complete; the cross-artifact half is not. Do not mark this closed until the translations land.
+
+**Next action**
+- M0 step 3: QuranEnc footnote policy — fetch `english_saheeh` + `persian_ih` (Rowwad), archive the terms page and the fetched JSON, decide markers-with-footnotes vs a marker-free display edition, then write the translation-extent test.
+
 ---
 
 ## Stage tracker
 
 | Stage | Scope | Status |
 |---|---|---|
-| **M0** | Vertical slice — data pinning, basmala segmentation, footnote policy, Persian normalizer gold tests, reference parser + fuzz, 100-item blind bilingual eval with scholar review | ⬜ not started |
+| **M0** | Vertical slice — data pinning ✅, basmala segmentation ✅, footnote policy, Persian normalizer gold tests, reference parser + fuzz, 100-item blind bilingual eval with scholar review | 🟡 in progress (2/6) |
 | **M1** | Core product, zero AI — D1 + FTS5, RRF, G0–G3 gates, verse cards, refusal copy | ⬜ |
 | **M2** | UI — Astro, EN/FA routing, RTL, verse pages, PWA, headers, sitemap | ⬜ |
 | **M3** | Dense retrieval — bge-m3 build-time embeddings, 512-bit codes, Hamming + int8 rerank | ⬜ |

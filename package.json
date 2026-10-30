@@ -1,0 +1,14 @@
+{
+  "name": "faater",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Free, public, Qur'an-grounded Q&A system (EN + FA)",
+  "scripts": {
+    "pipeline": "node pipeline/build-corpus.ts",
+    "test": "node --test \"pipeline/tests/*.test.ts\""
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

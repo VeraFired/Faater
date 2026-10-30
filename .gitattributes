@@ -1,3 +1,6 @@
+# Source files normalize to LF so Windows checkouts don't churn.
+* text=auto eol=lf
+
 # The Qur'an corpus must stay byte-for-byte identical to the Tanzil download.
 # Its SHA-256 (b3638f5cf03e2b05e4000efc0e4b656aafb3cf6ed28f8770b6497c5b43c46089)
 # is a documented invariant in .claude/RND.md and checked by the build pipeline.

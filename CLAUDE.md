@@ -61,6 +61,7 @@ Retrieval: trilingual BM25 over FTS5 (`ar_norm` + `en` + `fa_norm`) âŠ• dense âŠ
 
 ```bash
 pnpm pipeline      # build corpus + index from data/source
+pnpm test          # pipeline unit tests (Node native test runner, no deps)
 pnpm eval          # golden-set scores; must pass before deploy
 pnpm dev           # local Worker + web
 pnpm deploy        # wrangler deploy

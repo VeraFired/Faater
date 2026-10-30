@@ -1,0 +1,105 @@
+/**
+ * Normalization gold tests — regression guards, not decoration.
+ *
+ * Every case here broke a real design at some point in the research. See
+ * .claude/RND.md §5. If one of these fails, search is wrong for a whole
+ * language, not for an edge case.
+ */
+
+import { strict as assert } from 'node:assert'
+import { test } from 'node:test'
+
+import { detectScript, joinedVariants, normalize, stripMarks } from '../lib/normalize.ts'
+
+test('tatweel is stripped — the corpus spelling of الرحمن must be findable', () => {
+  // The corpus stores الرحمن with tatweel inside the word. A plain search for
+  // «الرحمن» returns ZERO hits unless U+0640 is stripped. This was a live bug.
+  const stored = 'الرَّحْمَـٰنِ'
+  assert.equal(normalize(stored), 'الرحمن')
+  assert.equal(normalize('الرحمن'), 'الرحمن')
+})
+
+test('superscript alef (U+0670) is stripped', () => {
+  assert.equal(normalize('الرَّحْمَٰن'), normalize('الرحمن'))
+})
+
+test('waqf and sajdah marks (U+06D6–U+06ED) are stripped', () => {
+  assert.equal(normalize('۞ إِنَّ اللَّهَ ۖ غَفُورٌ ۗ رَّحِيمٌ ۚ'), normalize('ان الله غفور رحيم'))
+})
+
+test('alef variants fold to bare alef', () => {
+  assert.equal(normalize('أ'), normalize('ا'))
+  assert.equal(normalize('إ'), normalize('ا'))
+  assert.equal(normalize('آ'), normalize('ا'))
+  assert.equal(normalize('ٱ'), normalize('ا'))
+})
+
+test('teh marbuta folds to heh, alef maqsura to yeh', () => {
+  assert.equal(normalize('رحمة'), normalize('رحمه'))
+  assert.equal(normalize('هدى'), normalize('هدي'))
+})
+
+test('Persian yeh and kaf bridge to Arabic — the named silent-failure mode', () => {
+  // Persian keyboards emit U+06CC / U+06A9; the Arabic index holds U+064A / U+0643.
+  // Without the bridge, «کتاب» never matches the Arabic text.
+  assert.equal(normalize('کتاب'), normalize('كتاب'))
+  assert.equal(normalize('مکه'), normalize('مكه'))
+  assert.equal(normalize('زکات'), normalize('زكات'))
+})
+
+test('ZWNJ: split form normalizes to a space-separated key', () => {
+  assert.equal(normalize('می‌خواهم'), 'مي خواهم')
+})
+
+test('ZWNJ: joined form is also emitted as a variant', () => {
+  // «می‌خواهم» and «میخواهم» are the same word to a user.
+  const variants = joinedVariants('می‌خواهم')
+  assert.ok(variants.includes('مي خواهم'), 'missing split form')
+  assert.ok(variants.includes('ميخواهم'), 'missing joined form')
+})
+
+test('ZWNJ: کتاب‌ها emits both forms', () => {
+  const variants = joinedVariants('کتاب‌ها')
+  assert.ok(variants.includes('كتاب ها'))
+  assert.ok(variants.includes('كتابها'))
+})
+
+test('Persian digits map to ASCII', () => {
+  assert.equal(normalize('۲۵۵'), '255')
+})
+
+test('Arabic-Indic digits map to ASCII', () => {
+  assert.equal(normalize('٢٥٥'), '255')
+})
+
+test('the basmala normalizes identically across its shadda spellings', () => {
+  const a = normalize('بِسْمِ اللَّهِ الرَّحْمَـٰنِ الرَّحِيمِ')
+  const b = normalize('بسم الله الرحمن الرحيم')
+  assert.equal(a, b)
+  assert.equal(a, 'بسم الله الرحمن الرحيم')
+})
+
+test('Latin text lowercases and drops punctuation', () => {
+  assert.equal(normalize('What does the Qur’an say about Patience?!'), 'what does the qur an say about patience')
+})
+
+test('script detection separates Persian-specific letters from Arabic', () => {
+  assert.equal(detectScript('چگونه صبر کنم'), 'fa') // چ
+  assert.equal(detectScript('کتاب'), 'fa') // ک
+  assert.equal(detectScript('كِتَاب'), 'ar') // Arabic kaf — genuinely ambiguous with Arabic
+  assert.equal(detectScript('what is patience'), 'en')
+  assert.equal(detectScript('123'), 'unknown')
+})
+
+test('stripMarks removes diacritics but preserves letter shapes', () => {
+  // Deliberately NOT folded: أ stays أ. Used for display-adjacent comparison.
+  assert.equal(stripMarks('أَلْحَمْدُ'), 'ألحمد')
+  assert.notEqual(stripMarks('أ'), stripMarks('ا'))
+})
+
+test('normalization is idempotent', () => {
+  for (const s of ['الرَّحْمَـٰنِ', 'می‌خواهم', 'What is Patience?', '۲۵۵']) {
+    const once = normalize(s)
+    assert.equal(normalize(once), once, `not idempotent: ${s}`)
+  }
+})
