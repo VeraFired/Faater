@@ -98,6 +98,30 @@ export function normalizeJoined(input: string): string {
 }
 
 /**
+ * Normalize for REFERENCE parsing, not search.
+ *
+ * Unlike normalize(), this preserves structural punctuation — `:`, `-`, dashes
+ * and `.` — because `2:255` is a reference and `2 255` is two numbers. Folding
+ * letters and digits still happens, so «۲:۲۵۵» and "2:255" converge.
+ *
+ * The preserved characters are exactly the ones a reference is made of; every
+ * other symbol becomes a space as usual.
+ */
+export function normalizeStructural(input: string): string {
+  let out = input.normalize('NFC')
+  out = out.replace(/[‌‍]/g, ' ')
+  out = out.replace(STRIP, '')
+  out = out.replace(/[۰-۹٠-٩]/g, (d) => DIGIT_MAP[d] ?? d)
+
+  let folded = ''
+  for (const ch of out) folded += FOLD[ch] ?? ch
+
+  folded = folded.replace(/[^\p{L}\p{N}\s:\-–—.]/gu, ' ')
+  folded = folded.replace(/\s+/g, ' ').trim()
+  return folded.toLowerCase()
+}
+
+/**
  * Persian words written with and without ZWNJ are the same word to a user.
  * Indexing both forms doubles recall on Persian verbs and plurals at trivial
  * cost (a few thousand extra tokens).

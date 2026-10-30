@@ -9,7 +9,14 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 
-import { detectScript, joinedVariants, normalize, stripMarks } from '../lib/normalize.ts'
+import {
+  detectScript,
+  joinedVariants,
+  normalize,
+  normalizeJoined,
+  normalizeStructural,
+  stripMarks,
+} from '../lib/normalize.ts'
 
 test('tatweel is stripped — the corpus spelling of الرحمن must be findable', () => {
   // The corpus stores الرحمن with tatweel inside the word. A plain search for
@@ -95,6 +102,33 @@ test('stripMarks removes diacritics but preserves letter shapes', () => {
   // Deliberately NOT folded: أ stays أ. Used for display-adjacent comparison.
   assert.equal(stripMarks('أَلْحَمْدُ'), 'ألحمد')
   assert.notEqual(stripMarks('أ'), stripMarks('ا'))
+})
+
+test('normalizeStructural keeps reference punctuation that normalize destroys', () => {
+  // The reason this function exists: a plain search normalization turns
+  // "2:255" into "2 255", which is two numbers, not a verse.
+  assert.equal(normalize('2:255'), '2 255')
+  assert.equal(normalizeStructural('2:255'), '2:255')
+  assert.equal(normalizeStructural('2:255-257'), '2:255-257')
+  assert.equal(normalizeStructural('2:255–257'), '2:255–257')
+  // ...while still folding letters and digits.
+  assert.equal(normalizeStructural('۲:۲۵۵'), '2:255')
+  assert.equal(normalizeStructural('سوره بقره'), 'سوره بقره')
+  assert.equal(normalizeStructural('آیه'), 'ايه')
+})
+
+test('normalizeStructural preserves decimals as one token', () => {
+  // "2.5" must survive as a token so the reference parser can REJECT it,
+  // rather than seeing "2" and "5" and inventing a verse.
+  assert.equal(normalizeStructural('2.5'), '2.5')
+})
+
+test('normalizeJoined removes ZWNJ instead of separating it', () => {
+  assert.equal(normalize('می‌خواهد'), 'مي خواهد')
+  assert.equal(normalizeJoined('می‌خواهد'), 'ميخواهد')
+  assert.equal(normalizeJoined('میخواهد'), 'ميخواهد')
+  // Both spellings converge to the joined key.
+  assert.equal(normalizeJoined('می‌خواهد'), normalizeJoined('میخواهد'))
 })
 
 test('normalization is idempotent', () => {

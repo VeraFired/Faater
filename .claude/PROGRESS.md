@@ -3,7 +3,7 @@
 Append-only. Date every entry. Record failures as loudly as successes.
 If a session dies mid-build, the next one resumes from this file alone.
 
-**Current status:** `M0 step 4 complete` — Persian gold tests + Finglish policy, 69 tests green.
+**Current status:** `M0 step 5 complete` — reference parser + fuzz, 96 tests green.
 
 ---
 
@@ -133,13 +133,36 @@ If a session dies mid-build, the next one resumes from this file alone.
 **Next action**
 - M0 step 5: reference parser with fuzzing — `2:255`, `2:255-257`, «آیه ۲۵۵», «سوره بقره آیه ۲۵۵», "Surah Al-Baqarah 255", spelled-out numbers, and decimal guards (`2.5` must not parse as 2:5). Fuzz it; a wrong reference silently answers the wrong verse.
 
+## 2026-10-31 — M0 step 5 complete: reference parser, fuzzed
+
+**Done**
+- `pipeline/lib/reference.ts` — parses numeric refs, ranges, Persian and English surah-name forms, and Finglish surah names, returning `single` / `range` / `surah` / `invalid`.
+- Out-of-range is an explicit `invalid` with a reason (`no-such-surah`, `ayah-out-of-range`, `reversed-range`, `cross-surah-range`) so the UI can serve its own refusal copy instead of pretending nothing matched.
+- **24 reference tests, 96 total, all green.** Includes 5,000 numeric-noise fuzz cases, 3,000 arbitrary-Unicode cases, and an exhaustive round-trip over all **6,236** verse refs.
+
+**The bug that mattered**
+- `normalize()` exists to build search keys, so it turns punctuation into spaces — `2:255` becomes `2 255`. Using it for reference parsing silently destroyed every reference. Added `normalizeStructural()`, which folds letters and digits but **preserves `:`, `-`, dashes and `.`**. Two views of one query: structural for numbers, words for names.
+- Preserving `.` is deliberate: it keeps `2.5` as one token so the parser can **reject** it, rather than seeing `2` and `5` and inventing a verse.
+
+**Discovered while testing**
+- Tanzil's `ename` is the English *meaning* ("The Cow"), not the transliteration ("Al-Baqara"). English users type "Al-Baqarah", "Al-Fatihah" — with a trailing `h` Tanzil omits. Added a general trailing-`h` variant at lookup time instead of hand-listing 114 spellings.
+- Persian «آیه» normalizes to `ايه` (آ→ا, ی→ي). The first marker list used the unfolded spellings and matched nothing.
+
+**Deliberately NOT supported (returns null, tested)**
+- **Spelled-out numbers** — «آیه دویست و پنجاه و پنج», "verse two hundred fifty five". A half-working number parser guesses; returning null routes to the no-evidence refusal, which is correct.
+- **Bare ayah numbers** — "255" and «آیه ۲۵۵» with no surah. There is no safe way to pick a surah.
+- **Decimals** — `2.5`, `3.14` never parse.
+
+**Next action**
+- M0 step 6 — the last one: a **100-item blind bilingual eval** with a scholar reviewer. Sets must be grouped by topic, split train/calibration/blind, and sized so the claimed interval is actually measurable (with 75 unanswerable items per language, one error is 1.33% — the power check comes first).
+
 ---
 
 ## Stage tracker
 
 | Stage | Scope | Status |
 |---|---|---|
-| **M0** | Vertical slice — data pinning ✅, basmala segmentation ✅, footnote policy ✅, Persian normalizer + Finglish ✅, reference parser + fuzz, 100-item blind bilingual eval with scholar review | 🟡 in progress (4/6) |
+| **M0** | Vertical slice — data pinning ✅, basmala segmentation ✅, footnote policy ✅, Persian normalizer + Finglish ✅, reference parser + fuzz ✅, 100-item blind bilingual eval with scholar review | 🟡 in progress (5/6) |
 | **M1** | Core product, zero AI — D1 + FTS5, RRF, G0–G3 gates, verse cards, refusal copy | ⬜ |
 | **M2** | UI — Astro, EN/FA routing, RTL, verse pages, PWA, headers, sitemap | ⬜ |
 | **M3** | Dense retrieval — bge-m3 build-time embeddings, 512-bit codes, Hamming + int8 rerank | ⬜ |

@@ -26,6 +26,12 @@ The terms require notifying the source of any note on the translation. We found 
 The terms require updating to the latest edition. Both editions are pinned by hash, so an upstream release will fail the build loudly rather than silently.
 **Fix:** a scheduled check of `catalog.json` versions; re-fetch, re-hash, re-run the translation tests, and record the version bump in PROGRESS.
 
+## 🟡 Reference parser: spelled-out numbers unsupported
+«آیه دویست و پنجاه و پنج» and "Surah Al-Baqarah verse two hundred fifty five" return null.
+**Why it is acceptable:** null routes to the no-evidence refusal. A half-built number parser would guess, and a wrong reference silently answers the wrong verse.
+**Fix if demand appears:** a Persian/English number-word parser behind a test that every produced reference re-validates against the corpus.
+**Owner:** post-M0, driven by production refusals.
+
 ## 🟡 Persian ZWNJ residual recall gap
 Persian uses ZWNJ in 5,052 of 6,236 verses. Dual search keys (split + joined) close most of the variation, but a joined query misses verses where the translator wrote a **real space** instead. Measured: «می‌خواهد» → 40 verses, «میخواهد» → 39.
 **Impact:** small recall loss, never a wrong answer.
