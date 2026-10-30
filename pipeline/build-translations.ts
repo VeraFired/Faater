@@ -136,6 +136,7 @@ async function main(): Promise<void> {
         segments: parsed.segments,
         footnotes: parsed.footnotes,
         searchText: parsed.searchText,
+        searchTextJoined: parsed.searchTextJoined,
       }
     }
 

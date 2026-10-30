@@ -86,6 +86,18 @@ export function normalize(input: string): string {
 }
 
 /**
+ * Normalize with ZWNJ REMOVED rather than treated as a separator.
+ *
+ * `normalize()` turns «می‌خواهد» into "مي خواهد"; a user who types the joined
+ * «میخواهد» produces "ميخواهد" and the two never meet. Indexing this second
+ * key alongside the first makes every ZWNJ variant converge. Both sides must
+ * emit both forms — see joinedVariants().
+ */
+export function normalizeJoined(input: string): string {
+  return normalize(input.normalize('NFC').replace(/[‌‍]/g, ''))
+}
+
+/**
  * Persian words written with and without ZWNJ are the same word to a user.
  * Indexing both forms doubles recall on Persian verbs and plurals at trivial
  * cost (a few thousand extra tokens).

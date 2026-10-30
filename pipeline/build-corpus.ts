@@ -236,18 +236,32 @@ async function main(): Promise<void> {
     }
   }
 
-  // ---- 6. emit ------------------------------------------------------------
-  const surahs = meta.map((m) => ({
-    index: m.index,
-    ayahs: m.ayas,
-    nameAr: m.name,
-    nameTranslit: m.tname,
-    nameEn: m.ename,
-    // TODO(M0 step 4): hand-authored Persian surah names — Tanzil has none.
-    nameFa: null as string | null,
-    revelation: m.type.toLowerCase(),
-    revelationOrder: m.order,
-  }))
+  // ---- 6. Persian names ---------------------------------------------------
+  // Tanzil ships no Persian surah names; they are hand-authored in
+  // data/lexicon/surahs.fa.json. Missing one here is a build failure, not a
+  // silent English name in a Persian UI.
+  const faRaw = await readFile(join(ROOT, 'data', 'lexicon', 'surahs.fa.json'), 'utf8')
+  const faFile = JSON.parse(faRaw) as {
+    surahs: Array<{ index: number; fa: string; alt?: string }>
+  }
+  const faByIndex = new Map(faFile.surahs.map((s) => [s.index, s]))
+
+  // ---- 7. emit ------------------------------------------------------------
+  const surahs = meta.map((m) => {
+    const fa = faByIndex.get(m.index)
+    if (!fa?.fa?.trim()) fail(`no Persian name for surah ${m.index}`)
+    return {
+      index: m.index,
+      ayahs: m.ayas,
+      nameAr: m.name,
+      nameTranslit: m.tname,
+      nameEn: m.ename,
+      nameFa: fa.fa,
+      nameFaAlt: fa.alt ?? null,
+      revelation: m.type.toLowerCase(),
+      revelationOrder: m.order,
+    }
+  })
 
   const corpus = {
     version: '1.0.0',

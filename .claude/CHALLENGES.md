@@ -26,6 +26,11 @@ The terms require notifying the source of any note on the translation. We found 
 The terms require updating to the latest edition. Both editions are pinned by hash, so an upstream release will fail the build loudly rather than silently.
 **Fix:** a scheduled check of `catalog.json` versions; re-fetch, re-hash, re-run the translation tests, and record the version bump in PROGRESS.
 
+## 🟡 Persian ZWNJ residual recall gap
+Persian uses ZWNJ in 5,052 of 6,236 verses. Dual search keys (split + joined) close most of the variation, but a joined query misses verses where the translator wrote a **real space** instead. Measured: «می‌خواهد» → 40 verses, «میخواهد» → 39.
+**Impact:** small recall loss, never a wrong answer.
+**Fix if it matters:** a space-stripped index variant. Rejected for now — it trades precision for recall. Re-measure with real Persian queries in the M0 blind eval before revisiting.
+
 ## 🔴 Persian is the weaker peer
 One translation, one unvalidated default, hand-authored surah names, **no benchmark**, no Finglish support, no answer to Iranian reachability.
 **Impact:** the product promise "English and Persian as equals" is not yet true.

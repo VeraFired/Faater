@@ -17,7 +17,7 @@
  * the translation and stay inside text segments untouched.
  */
 
-import { normalize } from './normalize.ts'
+import { normalize, normalizeJoined } from './normalize.ts'
 
 export type Segment =
   | { t: 'text'; v: string }
@@ -37,6 +37,11 @@ export interface ParsedTranslation {
   unresolvedNotes: number[]
   /** Search key: translation prose only, no `(N)`, no `[N]`, normalized. */
   searchText: string
+  /**
+   * Same text with ZWNJ removed instead of separated, so «می‌خواهد» and
+   * «میخواهد» — the same word to a Persian reader — share a key.
+   */
+  searchTextJoined: string
 }
 
 /**
@@ -85,11 +90,18 @@ export function parseTranslation(text: string, footnotesRaw: string): ParsedTran
   }
   if (pos < rest.length) segments.push({ t: 'text', v: rest.slice(pos) })
 
-  const searchText = normalize(
-    segments.filter((s) => s.t === 'text').map((s) => (s as { v: string }).v).join(' '),
-  )
+  const prose = segments
+    .filter((s) => s.t === 'text')
+    .map((s) => (s as { v: string }).v)
+    .join(' ')
 
-  return { segments, footnotes, unresolvedNotes: [...unresolved].sort((a, b) => a - b), searchText }
+  return {
+    segments,
+    footnotes,
+    unresolvedNotes: [...unresolved].sort((a, b) => a - b),
+    searchText: normalize(prose),
+    searchTextJoined: normalizeJoined(prose),
+  }
 }
 
 /** Rejoin segments. Must reproduce the input byte-for-byte — the licence guard. */

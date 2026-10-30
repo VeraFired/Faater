@@ -3,7 +3,7 @@
 Append-only. Date every entry. Record failures as loudly as successes.
 If a session dies mid-build, the next one resumes from this file alone.
 
-**Current status:** `M0 step 3 complete` — translations pinned and segmented, 49 tests green.
+**Current status:** `M0 step 4 complete` — Persian gold tests + Finglish policy, 69 tests green.
 
 ---
 
@@ -107,13 +107,39 @@ If a session dies mid-build, the next one resumes from this file alone.
 **Next action**
 - M0 step 4: Persian normalizer with a real gold corpus — ZWNJ dual forms, Finglish policy (`sabr`, `namaz`), and hand-authored Persian surah names (`nameFa` is still `null` for all 114).
 
+## 2026-10-31 — M0 step 4 complete: Persian gold corpus, Finglish policy, surah names
+
+**Done**
+- **Persian surah names** hand-authored for all 114 (`data/lexicon/surahs.fa.json`), with alternates where a second name is standard (فاتحه/حمد, اخلاص/توحید, مسد/تبت, غافر/مؤمن, شرح/انشراح, اسراء/بنی‌اسرائیل). `nameFa` is no longer null. **Marked `_review: unreviewed`** — native sign-off is still owed.
+- **Finglish policy decided and implemented** (ADR-015): curated aliases, **never** a general transliterator. 83 concepts + 19 proper names + 114 derived surah aliases = **476 keys**.
+- **ZWNJ dual keys** (ADR-016): every Persian verse now carries `searchText` (ZWNJ as separator) and `searchTextJoined` (ZWNJ removed). Queries emit both.
+- **Persian gold tests against the real Rowwad translation**, not toy strings.
+- **69 tests green.**
+
+**The measurement that justifies the whole step**
+- 36 common Persian religious terms, routed correctly: **36/36 retrievable.**
+- The same 36 terms used raw, without `normalize()`: **14 return ZERO.** «پیامبر» and «ایمان» — among the most common words in the file — match nothing, because the index holds Arabic yeh while a Persian keyboard emits Persian yeh.
+- ZWNJ is load-bearing: **5,052 / 6,236** Persian verses contain it. «می‌خواهد» → 40 verses, «میخواهد» → 39.
+
+**Broke / would have broken**
+- `finglishKey` collapsed vowel *pairs*, so removing the apostrophe from "Ma'aarij" left a three-vowel run and produced a key the canonical form could never reproduce. Fixed with a fixed-point loop over the digraph table.
+- A first draft asserted «می‌خواهد» and «میخواهد» retrieve **identical** sets. They do not, and the reason is legitimate: one verse uses a real space where a user types no separator. Changed to assert the safe direction (`joined ⊆ split`) and capped the gap, rather than weakening the test until it passed.
+- The Persian-term probe initially reported 22/36 — I had searched for unnormalized terms. The false zeros were the failure mode itself.
+
+**Open**
+- Persian surah names and all Persian copy still need a native reviewer (CHALLENGES: Persian is the weaker peer).
+- ZWNJ residual gap tracked as 🟡.
+
+**Next action**
+- M0 step 5: reference parser with fuzzing — `2:255`, `2:255-257`, «آیه ۲۵۵», «سوره بقره آیه ۲۵۵», "Surah Al-Baqarah 255", spelled-out numbers, and decimal guards (`2.5` must not parse as 2:5). Fuzz it; a wrong reference silently answers the wrong verse.
+
 ---
 
 ## Stage tracker
 
 | Stage | Scope | Status |
 |---|---|---|
-| **M0** | Vertical slice — data pinning ✅, basmala segmentation ✅, footnote policy ✅, Persian normalizer gold tests, reference parser + fuzz, 100-item blind bilingual eval with scholar review | 🟡 in progress (3/6) |
+| **M0** | Vertical slice — data pinning ✅, basmala segmentation ✅, footnote policy ✅, Persian normalizer + Finglish ✅, reference parser + fuzz, 100-item blind bilingual eval with scholar review | 🟡 in progress (4/6) |
 | **M1** | Core product, zero AI — D1 + FTS5, RRF, G0–G3 gates, verse cards, refusal copy | ⬜ |
 | **M2** | UI — Astro, EN/FA routing, RTL, verse pages, PWA, headers, sitemap | ⬜ |
 | **M3** | Dense retrieval — bge-m3 build-time embeddings, 512-bit codes, Hamming + int8 rerank | ⬜ |

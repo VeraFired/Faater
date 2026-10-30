@@ -68,10 +68,22 @@ test('search keys never leak into display text', () => {
   }
 })
 
-test('Persian surah names are explicitly unset, not silently missing', () => {
-  // Tanzil ships no Persian names. null records the gap so M0 step 4 can close
-  // it deliberately instead of shipping an English name in a Persian UI.
+test('every surah has a hand-authored Persian name, and none collide', () => {
+  // Tanzil ships no Persian names. Shipping an English name in a Persian UI is
+  // not an option, so the gap is closed deliberately in
+  // data/lexicon/surahs.fa.json. These names are UNREVIEWED until a native
+  // speaker signs off — see the `_review` field in that file.
+  assert.equal(corpus.surahs.length, 114)
   for (const s of corpus.surahs) {
-    assert.equal(s.nameFa, null, `surah ${s.index} unexpectedly has a Persian name`)
+    assert.ok(s.nameFa && s.nameFa.trim(), `surah ${s.index} has no Persian name`)
   }
+  const names = corpus.surahs.map((s) => s.nameFa)
+  assert.equal(new Set(names).size, names.length, 'duplicate Persian surah names')
+})
+
+test('Persian surah names carry a known set of alternate names', () => {
+  const byIndex = new Map(corpus.surahs.map((s) => [s.index, s]))
+  assert.equal(byIndex.get(1)!.nameFaAlt, 'حمد')
+  assert.equal(byIndex.get(112)!.nameFaAlt, 'توحید')
+  assert.equal(byIndex.get(2)!.nameFaAlt, null)
 })

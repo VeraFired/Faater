@@ -27,7 +27,15 @@ export interface Corpus {
     basmalaPrefixes: number
   }
   basmalaDocument: { id: string; ref: string; text: string; norm: string; variants: string[] }
-  surahs: Array<{ index: number; ayahs: number; nameAr: string; nameEn: string; nameFa: string | null }>
+  surahs: Array<{
+    index: number
+    ayahs: number
+    nameAr: string
+    nameEn: string
+    nameTranslit: string
+    nameFa: string
+    nameFaAlt: string | null
+  }>
   verses: CorpusVerse[]
 }
 

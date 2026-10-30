@@ -164,6 +164,38 @@ Every emitted artefact embeds the edition, publisher, version, seven licence con
 
 ---
 
+## ADR-015 — Finglish is handled by curated aliases, never a transliterator
+**Date:** 2026-10-31
+
+`sabr`, `namaz`, `khoda` is how a large share of Persian speakers type. Script detection sees Latin, routes it to the English index, and it matches nothing.
+
+**Decision.** A curated alias table (`data/lexicon/finglish.json`), compiled into `data/build/lexicon.json` alongside surah aliases. At launch: **83 concepts + 19 proper names + 114 surah aliases = 476 keys.**
+
+**Why not a transliterator.** Finglish has no standard orthography — `khoda` / `khuda` / `xoda`, `sabr` / `sabur`. A rule-based transliterator converts arbitrary Latin into confident Persian, and in a religious Q&A product **a wrong verse is worse than a refusal**. Unlisted input resolves to nothing and the no-evidence refusal handles it.
+
+**Why not skip it.** Routing Finglish to the English index is a guaranteed miss, and Persian users are the weaker peer we are explicitly trying to serve.
+
+**Enforced by tests, not convention.** Near-misses must not match: `sabrina` does not resolve to `sabr`, `quranic` does not resolve to `quran`, and an unknown string resolves to nothing. Token matching is whole-token, never substring.
+
+**Surah aliases are derived, not transcribed.** `translitKeys()` generates them from Tanzil's `tname` ("Al-Faatiha" → `al fatiha`, `fatiha`), so they cannot drift from the corpus. English "meaning names" (e.g. *Sincerity* for surah 112) are deliberately excluded — they belong to the concept layer, or every English moral word becomes a surah reference.
+
+**Growth path.** The backlog is production refusals whose query was Latin-script and Persian-shaped. That is a data file, not a model.
+
+---
+
+## ADR-016 — Two search keys per Persian verse (ZWNJ split and joined)
+**Date:** 2026-10-31
+
+`normalize()` treats ZWNJ as a separator, so «می‌خواهد» becomes `مي خواهد`. A user who types the joined «میخواهد» produces `ميخواهد`, and the two never meet. Persian keyboards make ZWNJ easy to omit, so this is the common case, not an edge case.
+
+**Decision.** Every Persian verse carries two search keys: the split form (`searchText`) and the joined form (`searchTextJoined`, ZWNJ removed). Queries emit both forms and match against both.
+
+**Measured.** 5,052 of 6,236 Persian verses contain ZWNJ — the dual keys are load-bearing, not theoretical. «می‌خواهد» retrieves 40 verses; «میخواهد» retrieves 39.
+
+**Residual gap, stated rather than hidden.** The one-verse difference is a verse where the translator wrote a **real space** where the user writes no separator; there is no ZWNJ in the source to split, so the joined query cannot match. Tests assert the safe direction (`joined ⊆ split`) and cap the gap at 5 verses so a regression is caught. Closing it completely would need a space-stripped index, which trades precision for recall — a bad bargain here.
+
+---
+
 ## Rejected ideas worth remembering
 
 - **118–235 MB in-browser ONNX model** — strands mobile and Iran-based users, ~2.6 TB/month at 100k cold loads.
