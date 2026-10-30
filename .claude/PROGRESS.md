@@ -3,7 +3,7 @@
 Append-only. Date every entry. Record failures as loudly as successes.
 If a session dies mid-build, the next one resumes from this file alone.
 
-**Current status:** `M0 step 2 complete` — basmala segmented, corpus build + 35 tests green.
+**Current status:** `M0 step 3 complete` — translations pinned and segmented, 49 tests green.
 
 ---
 
@@ -68,13 +68,52 @@ If a session dies mid-build, the next one resumes from this file alone.
 **Next action**
 - M0 step 3: QuranEnc footnote policy — fetch `english_saheeh` + `persian_ih` (Rowwad), archive the terms page and the fetched JSON, decide markers-with-footnotes vs a marker-free display edition, then write the translation-extent test.
 
+## 2026-10-31 — M0 step 3 complete: translations pinned, footnote policy decided
+
+**Done**
+- Fetched the QuranEnc **catalog** and discovered the editions ship as **SQLite downloads** — one file each instead of 6,236 API calls.
+- Pinned into `data/source/quranenc/` (all hashed in `sources.lock.json`):
+  - `english_saheeh.sqlite` — Noor International Center, **v1.1.2**, updated 2025-06-24
+  - `persian_ih.sqlite` — Rowwad Translation Center, **v1.1.3**, updated 2026-02-23
+  - `catalog.json`, and an archived copy of the terms page (`about-en.html`)
+- Archived the terms **verbatim**. Condition 1 reads: *"No modification, addition, or deletion of the content."*
+- `pipeline/lib/translation.ts` — lossless segmenter. `build-translations.ts` verifies hashes, then asserts 6,236 rows, ref alignment with the corpus, byte-exact rejoining, and that each edition's own `(N)` matches its ayah number.
+- **49 tests green.** `node:sqlite` is built in, so the pipeline still has zero dependencies.
+
+**Facts that changed the decision**
+| | English | Persian |
+|---|---|---|
+| Verses with footnotes | **1,613 (25.9%)** | **0** |
+| Inline `[N]` markers | 1,904 | **0** |
+| Dangling markers | **1 — 7:143/#403** | 0 |
+| Leading `(N)` prefix | 6,236 / 6,236 | 0 |
+
+- **The footnote problem is English-only.** Persian is marker-free; it never needed a policy.
+- Every English verse begins with `(N)`, its own ayah number. Stripping it would break condition 1.
+- Persian uses `[ ... ]` for translator glosses («[و سپاس‌ها]») — a naive bracket stripper would delete words from a no-modification edition.
+
+**Decision (ADR-014).** Store verbatim; split into `text` / `num` / `note` segments. The renderer *uses* `(N)` as the verse-number badge (shown once, not deleted) and renders `[N]` as a superscript pointing at the translator's own footnote behind a disclosure, `tafsir_shown: true`.
+
+**Translation-extent test written — the half deferred from step 2 is now closed.** For all 112 basmala prefixes, neither translation *begins* with a basmala translation. The assertion is `startsWith`, not `includes`: 96:1 legitimately reads "Recite in the name of your Lord".
+
+**Broke / would have broken**
+- A naive "no prefix verse mentions the basmala" test would have failed on 96:1 and wrongly condemned a correct split. Caught before writing it.
+- `searchText` must exclude marker and number tokens, or a query for the string "2011" retrieves a verse about divine unity.
+
+**License obligations now tracked in CHALLENGES**
+- Condition 5: report the 7:143 `[403]` defect to QuranEnc (not blocking).
+- Condition 6: update to the latest edition — hash pinning makes an upstream release fail loudly instead of silently.
+
+**Next action**
+- M0 step 4: Persian normalizer with a real gold corpus — ZWNJ dual forms, Finglish policy (`sabr`, `namaz`), and hand-authored Persian surah names (`nameFa` is still `null` for all 114).
+
 ---
 
 ## Stage tracker
 
 | Stage | Scope | Status |
 |---|---|---|
-| **M0** | Vertical slice — data pinning ✅, basmala segmentation ✅, footnote policy, Persian normalizer gold tests, reference parser + fuzz, 100-item blind bilingual eval with scholar review | 🟡 in progress (2/6) |
+| **M0** | Vertical slice — data pinning ✅, basmala segmentation ✅, footnote policy ✅, Persian normalizer gold tests, reference parser + fuzz, 100-item blind bilingual eval with scholar review | 🟡 in progress (3/6) |
 | **M1** | Core product, zero AI — D1 + FTS5, RRF, G0–G3 gates, verse cards, refusal copy | ⬜ |
 | **M2** | UI — Astro, EN/FA routing, RTL, verse pages, PWA, headers, sitemap | ⬜ |
 | **M3** | Dense retrieval — bge-m3 build-time embeddings, 512-bit codes, Hamming + int8 rerank | ⬜ |

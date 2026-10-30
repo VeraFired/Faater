@@ -129,6 +129,41 @@ M0 proves: data pinning, basmala segmentation, footnote policy, Persian normaliz
 
 ---
 
+## ADR-014 — Ship QuranEnc translations verbatim, as segments
+**Date:** 2026-10-31 · **Resolves the footnote defect**
+
+QuranEnc's terms (archived at `data/source/quranenc/about-en.html`, hash pinned) begin: **"No modification, addition, or deletion of the content."** That sentence decides the whole design: we cannot strip the inline `[7]` markers, and we cannot strip the leading `(N)` verse number either.
+
+Evidence gathered from the pinned SQLite editions:
+
+| Fact | English (`english_saheeh` v1.1.2) | Persian (`persian_ih` v1.1.3) |
+|---|---|---|
+| Verses | 6,236 | 6,236 |
+| With footnotes | **1,613 (25.9%)** | **0** |
+| Inline `[N]` markers | 1,904 | **0** |
+| Footnote entries | 1,903 | 0 |
+| Dangling markers | **1 — 7:143/#403** | 0 |
+| Leading `(N)` prefix | **6,236 / 6,236** | 0 |
+
+**The footnote problem is English-only.** The Persian edition is marker-free and needs no policy at all.
+
+**Decision.** Store the text verbatim and split it losslessly into typed segments — `text`, `num` (the `(N)` prefix), `note` (the `[N]` marker). The renderer then:
+- uses the edition's own `(N)` as the **verse-number badge**, so the number is displayed once instead of duplicated — nothing is deleted;
+- renders `[N]` as a superscript linked to **the translator's own footnote**, behind a per-verse disclosure, with `tafsir_shown: true`;
+- leaves `[ ... ]` glosses without digits (e.g. FA «[و سپاس‌ها]») inside the text — they are translation, not apparatus.
+
+Every emitted artefact embeds the edition, publisher, version, seven licence conditions and the SHA-256 of both the SQLite file and the archived terms page.
+
+**Why footnotes are not "tafsir" under our content rules.** CLAUDE.md bans shipping tafsir *works* (Nemuneh, Al-Mizan). A translator's own footnotes are part of the licensed edition and reproduce its apparatus; we author nothing. The rule that forbids *us* from interpreting is untouched.
+
+**Rejected:** strip markers (violates condition 1 outright); switch to ClearQuran (CC BY-ND, loses Sahih International's ubiquity, and ND makes a search index legally murkier); request written permission to strip (slow, probably refused, and unnecessary once rendering can use the number).
+
+**Consequence for search.** `searchText` is built from text segments only — no `(N)`, no `[N]` — then normalized. Footnote bodies are never indexed, so a query about a footnote's prose cannot retrieve its verse.
+
+**Open action (condition 5).** The source must be notified of the 7:143 defect. Tracked in CHALLENGES.
+
+---
+
 ## Rejected ideas worth remembering
 
 - **118–235 MB in-browser ONNX model** — strands mobile and Iran-based users, ~2.6 TB/month at 100k cold loads.

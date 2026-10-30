@@ -4,18 +4,27 @@ Every item here is something that will bite if forgotten. Status: 🔴 open · �
 
 ---
 
-## 🔴 Basmala fused into verse 1 of 113 surahs
+## 🟢 Basmala fused into verse 1 of 113 surahs
 Tanzil prepends `بِسْمِ اللَّهِ الرَّحْمَـٰنِ الرَّحِيمِ` to the first verse of every surah except At-Tawbah. QuranEnc translations **do not include it** — verified 2:1 Arabic `بسم الله الرحمن الرحيم الم` vs English `"Alif, Lām, Meem.[7]"`.
 
-**Impact:** every surah-opening card shows untranslated Arabic words that look like part of the verse.
-**Also:** indexing it inside verse rows makes a basmala query return 113 near-identical results and inflates document frequency for الله/الرحمن/الرحيم, corrupting BM25 on the most common words in the corpus.
-**Fix:** split into a `basmala` field (presentational, bytes untouched); index once as a pseudo-document. Tests: 2:1 and 112:1 render separately, 9:1 has none, a basmala query returns 1:1 only. 95:1 and 97:1 use a shadda variant; 27:30 has one mid-verse.
-**Owner:** M0.
+**RESOLVED 2026-10-31 (M0 step 2).** Split into `basmala` / `body` / `bodyNorm` fields with the verse bytes untouched. Shape verified: **113 verses carry it — 112 prefixes (surahs 2–114 except 9) + 1:1 as a whole verse**, which is genuine scripture, not a prefix. 27:30's mid-verse basmala is left alone.
+**Index rule:** FTS uses `bodyNorm`, **never** `arabicNorm` — otherwise the basmala is indexed 112 extra times and BM25 is corrupted for the three most common words in the corpus. A test asserts no verse body begins with the basmala key.
+**Proof:** the translation-extent test — for all 112 prefixes, neither the English nor the Persian translation *begins* with a basmala translation. (`startsWith`, not `includes`: 96:1 legitimately reads "Recite in the name of your Lord".)
 
-## 🔴 QuranEnc inline footnote markers
+## 🟢 QuranEnc inline footnote markers
 API returns a separate `footnotes` field plus inline `[7]`, `[98]`, `[464]`, `[2011]` in the text. Shipping verbatim leaves dangling markers; stripping modifies a no-modification translation; showing them is tafsir.
-**Options:** (a) ship markers + footnotes behind a disclosure, `tafsir_shown: true`; (b) switch display edition to marker-free ClearQuran; (c) written permission to strip.
-**Owner:** M0, with archived terms.
+
+**RESOLVED 2026-10-31 (M0 step 3) — see ADR-014.** Ship verbatim as lossless segments; render `(N)` as the verse-number badge and `[N]` as a superscript linked to the translator's own footnote behind a disclosure (`tafsir_shown: true`). Nothing is added, modified or deleted.
+**Persian edition has ZERO footnotes and zero markers** — this was never a Persian problem.
+**Live source defect:** `english_saheeh` 7:143 cites `[403]` but the edition's footnotes stop at `[402]`. Recorded in `unresolvedNotes`; the renderer must emit a bare superscript. **Condition 5 obliges us to notify QuranEnc** — outstanding action.
+
+## 🟡 QuranEnc condition 5 — report the 7:143 defect
+The terms require notifying the source of any note on the translation. We found one: `english_saheeh` v1.1.2, 7:143, marker `[403]` with no footnote.
+**Fix:** send a report to QuranEnc and archive the outbound message + any reply in `data/source/quranenc/`. Not blocking the build.
+
+## 🟡 QuranEnc condition 6 — edition updates are mandatory
+The terms require updating to the latest edition. Both editions are pinned by hash, so an upstream release will fail the build loudly rather than silently.
+**Fix:** a scheduled check of `catalog.json` versions; re-fetch, re-hash, re-run the translation tests, and record the version bump in PROGRESS.
 
 ## 🔴 Persian is the weaker peer
 One translation, one unvalidated default, hand-authored surah names, **no benchmark**, no Finglish support, no answer to Iranian reachability.

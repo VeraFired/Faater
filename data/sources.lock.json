@@ -26,6 +26,38 @@
       "bytes": 77234,
       "sha256": "8867c1d88191472adec9db694b3cd9f135b1a2ef580574d32cf888dcb22c5c7a",
       "note": "license=\"cc-by\", (C) 2008-2009 Tanzil.info"
+    },
+    "english_saheeh.sqlite": {
+      "url": "https://quranenc.com/downloads/sqlite/english_saheeh.sqlite",
+      "license": "QuranEnc terms — 7 conditions, incl. no modification; non-commercial display",
+      "role": "English translation — Noor International Center (v1.1.2)",
+      "bytes": 1245184,
+      "sha256": "8e3feedb9b6735d60355c53aef9ebc4b86a8b995d118c0387e7e1bd93b67eddb",
+      "note": "Version 1.1.2; 1,613 verses carry footnotes; one dangling marker at 7:143 (#403)"
+    },
+    "persian_ih.sqlite": {
+      "url": "https://quranenc.com/downloads/sqlite/persian_ih.sqlite",
+      "license": "QuranEnc terms — 7 conditions, incl. no modification; non-commercial display",
+      "role": "Persian translation — Rowwad Translation Center (v1.1.3)",
+      "bytes": 1769472,
+      "sha256": "937cc090d78fd93be80802d2ac7bfe91a6dc179996635eea2e6c6fd0227da365",
+      "note": "Version 1.1.3; ZERO footnote markers — the footnote problem is English-only"
+    },
+    "quranenc-catalog.json": {
+      "url": "https://quranenc.com/api/v1/translations",
+      "license": "QuranEnc terms",
+      "role": "edition metadata: titles, versions, update dates",
+      "bytes": 65890,
+      "sha256": "bdf43979fd2d0158ad8a87e78a4718cd6c962db2c7afc40042b065ccb8ef5386",
+      "note": "fetched 2026-10-31"
+    },
+    "quranenc-terms.html": {
+      "url": "https://quranenc.com/en/home/about",
+      "license": "Reference copy — terms of use",
+      "role": "archived terms page proving the 7 redistribution conditions",
+      "bytes": 295462,
+      "sha256": "ade80d4560ed4917852620dea09d387f87ee27563ec252663a6731f677950ce1",
+      "note": "archived 2026-10-31; condition 1 forbids modification/addition/deletion"
     }
   }
 }
