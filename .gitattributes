@@ -2,3 +2,5 @@
 # Its SHA-256 (b3638f5cf03e2b05e4000efc0e4b656aafb3cf6ed28f8770b6497c5b43c46089)
 # is a documented invariant in .claude/RND.md and checked by the build pipeline.
 Resources/quran-simple.txt -text
+Resources/quran-simple-clean.txt -text
+Resources/quran-data.xml -text

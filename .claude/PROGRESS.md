@@ -24,8 +24,23 @@ If a session dies mid-build, the next one resumes from this file alone.
 - The scope gate must be **three-way**, not binary — "Islamic but not Quranic" is a real class.
 - Two live content defects found in the corpus: fused basmala, and QuranEnc inline footnote markers.
 
+## 2026-10-31 — M0 step 1 complete: data pinned
+
+**Done**
+- Pinned three Tanzil sources into `Resources/`, hashes in `data/sources.lock.json`:
+  - `quran-simple.txt` — 1,353,702 B — `b3638f5c…c46089`
+  - `quran-simple-clean.txt` — 745,035 B — `2559f385…8027af`
+  - `quran-data.xml` — 77,234 B — `8867c1d8…c5c7a`
+- Added `.gitattributes` marking all three `-text` so Git never rewrites line endings. Verified the staged blob hash equals the working-file hash.
+- Ran the normalized agreement cross-check: **6,236 / 6,236 = 100.00%**, zero mismatches.
+
+**Verified independently**
+- The basmala fusion is real and is a **Tanzil convention, not corruption**: Tanzil's own clean text has `2:1 = بسم الله الرحمن الرحيم الم`, and `9:1` has none.
+- Precise shape: **1:1 is genuinely verse 1 of Al-Fatiha** (the only line that is the basmala alone). Surahs **2–114 except 9 get it prepended — 112 prefixes**. So 113 surahs show a basmala, 9 shows none.
+- 100% agreement means both files carry the same fusion, so the cross-check alone **cannot** detect it. The basmala test must assert against the translation extent, not against clean-text agreement.
+
 **Next action**
-- M0 step 1: pin the data — `sources.lock.json`, fetch `quran-simple-clean.txt`, assert ≥99.5% normalized agreement.
+- M0 step 2: basmala segmentation — split into a `basmala` field, index once as a pseudo-document, add the three tests.
 
 ---
 

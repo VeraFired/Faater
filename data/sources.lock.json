@@ -1,0 +1,31 @@
+{
+  "fetched": "2026-10-31",
+  "step": "M0 step 1 - data pinning",
+  "rules": "Build fails if a fetched hash differs. See .claude/CHALLENGES.md.",
+  "sources": {
+    "quran-simple.txt": {
+      "url": "https://tanzil.net/download/",
+      "license": "CC BY 3.0 (verbatim only)",
+      "role": "display + search Arabic text",
+      "bytes": 1353702,
+      "sha256": "b3638f5cf03e2b05e4000efc0e4b656aafb3cf6ed28f8770b6497c5b43c46089",
+      "note": "2021-02 release 1.1 variant, fully vowelled, basmala prefixed to surah openings"
+    },
+    "quran-simple-clean.txt": {
+      "url": "https://tanzil.net/pub/download/index.php?quranType=simple-clean&outType=txt&agree=true",
+      "license": "CC BY 3.0 (verbatim only)",
+      "role": "independent cross-check artifact",
+      "bytes": 745035,
+      "sha256": "2559f385c725bfd8bab095d2bf08395b74bc5bacaa0c3825eaf159ae018027af",
+      "note": "undiacritized; used only for normalization-drift detection"
+    },
+    "quran-data.xml": {
+      "url": "https://tanzil.net/res/text/metadata/quran-data.xml",
+      "license": "CC BY 3.0",
+      "role": "surah/juz/hizb/rub/page/manzil/sajda metadata",
+      "bytes": 77234,
+      "sha256": "8867c1d88191472adec9db694b3cd9f135b1a2ef580574d32cf888dcb22c5c7a",
+      "note": "license=\"cc-by\", (C) 2008-2009 Tanzil.info"
+    }
+  }
+}
