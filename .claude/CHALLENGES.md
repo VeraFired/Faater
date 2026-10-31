@@ -119,6 +119,8 @@ The top-5 for "charity" (57:18, 2:263) and "arrogance" (23:67, 7:206) are genuin
 
 **Update 2026-10-31 (M1 slice 1).** A second frame-term defect surfaced while porting to D1: the word "quran" matched the *quran concept*, so a question whose topical word was absent from the translation expanded into verses that merely mention the Book. Concept matching now ignores frame-only triggers whenever the query has content words. Pilot effect: hit@5 28.8% → 27.3%, direct 36.0% → 34.0% — the removed hits were correct-looking garbage.
 
+**Update 2026-10-31 (hardening).** After the ۀ (Persian heh with hamza) fold and the verbatim segment join, the current pilot is hit@5 **28.8%**, direct 34.0%, paraphrase **12.5%** (2/16), MRR 0.215; D1 parity 30.3% / 34.0% / 18.8% / 0.229. Paraphrase is still the failure: 14 of 16 items miss, so dense retrieval (M3) remains the remedy.
+
 ## 🟡 Concept synonyms are unreviewed — search-only, but still load-bearing
 The synonym file was drafted by agents and verified only for **corpus existence**, not for **sense**. `df.ts` proves a term occurs; it cannot prove «صدقه» is the right Arabic term for the concept "charity" in every verse it touches. Moving a wrong-sense verse into the candidate set is invisible until a human reads it.
 **Mitigations in place:** synonyms are never displayed; the file is labelled `_review: UNREVIEWED`; content rules already forbid interpreting.

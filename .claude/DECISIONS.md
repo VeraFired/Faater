@@ -317,6 +317,11 @@ lists fused at RRF weight 0.1.
 | paraphrase hit@5 | 6.3% | 12.5% |
 | MRR | 0.198 | 0.212 |
 
+**SUPERSEDED 2026-10-31 (ۀ normalization fold + verbatim segment join).**
+Re-measured parity: hit@5 28.8% / 30.3%; direct 34.0% / 34.0%; paraphrase
+12.5% / 18.8%; MRR 0.215 / 0.229; D1 query 12.3 ms/item. The decision above is
+unchanged; only the numbers moved. Current table: `docs/m1-worker.md`.
+
 **Deliberate differences.**
 - FTS5 bm25 weights whole columns, not terms. The in-memory retriever
   down-weights frame terms (0.2); the Worker excludes them from the match when

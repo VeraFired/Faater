@@ -420,13 +420,160 @@ Split by answer type at k=5: **direct 36.0% / 16.9% recall** (n=50), **paraphras
 
 ---
 
+## 2026-10-31 — M2 slice: zero-dependency EN/FA frontend
+
+**Built**
+- `web/index.html`, `web/app.js`, `web/styles.css` — a static site with **no
+  build step and no dependencies**, served by the same Worker through
+  `[assets]`; `/api/*` runs the Worker first (`run_worker_first`).
+- EN/FA routing in-page, `dir=rtl` for Persian, Arabic rendered first and
+  verbatim, translations labelled with edition title and publisher version.
+- Refusal and boundary copy comes from the API; the frontend never composes
+  religious text. No analytics, external fonts or cookies.
+- `worker/src/ask.ts` imports `data/scope-model.json` as a build-time bundle
+  slot. The committed file is a **placeholder** (`version: "placeholder"`);
+  the Worker explicitly skips G1 while it is a placeholder.
+
+**Not included**
+- Persian UI copy and RTL rendering are **UNREVIEWED** on a real device.
+- No PWA, sitemap or Astro pipeline yet — the zero-dependency static page was
+  chosen first so the answer path could be exercised end to end.
+
+**Next action**
+- Harden the Worker around the reference, language and safety edges now
+  exposed by real input (done in the next entry).
+
+---
+
+## 2026-10-31 — M1/M2 hardening: reference ranges, language, safety, translation fidelity
+
+**Fixed**
+- **Reference parser.** A sentence-final period is allowed (`Show me 2:255.`)
+  while a decimal is not (`2:255.5`). An **out-of-range** reference (`2:999`,
+  `114:7`) is now refused with fixed copy instead of falling through to
+  unrelated verses.
+- **Full-surah ranges.** `2:1-286` previously bound one SQL placeholder per
+  ayah and exceeded D1's 100-parameter cap; it is now one `BETWEEN` query.
+  An explicit reference also bypasses G1 — the user has chosen the scope.
+- **Surah aliases.** `buildSurahRefs` is the single source for both retrieval
+  and reference parsing. The Worker's copy had omitted `nameFaAlt`, so
+  «سوره حمد» silently fell through to free-text search.
+- **Language detection** is by dominant script, not the presence of one
+  Arabic character: an English question quoting «الصبر» stays English.
+- **Crisis branch.** Arabic-script self-harm markers added and matched through
+  `normalize()` (hamza/diacritic variants); the crisis branch now runs before
+  the length cap, so an over-long crisis message is never answered with
+  "please shorten it". Control characters get their own clarification reason.
+- **CORS fails closed.** A disallowed origin no longer receives
+  `access-control-allow-origin: null` (opaque origins match `null`, which
+  silently disabled the allowlist); the header is omitted and `Vary: Origin`
+  is set.
+- **Turnstile outcomes.** Invalid token → 403; verifier 5xx/timeout → 503
+  (`turnstile_unavailable`) so the client can distinguish an outage from a
+  rejected token. `/api/config` exposes only the public site key.
+- **Translation fidelity.** QuranEnc segments are rejoined **without
+  inserting spaces** — the stored text is now verbatim. Cards carry
+  `version`, `publisher` and `sourceUrl` (licence conditions 2 and 3);
+  footnotes are linked by the publisher's number, not list position.
+- **Basmala indexing.** 1:1 stores an empty body but the basmala is indexed as
+  a document, so an ordinary basmala query still finds it.
+- **FTS ranking bug.** Coverage and phrase bonuses were applied but never
+  sorted, so they had no effect on RRF list positions. The field results are
+  now sorted by our score before fusion.
+- Tanzil's copyright block is copied verbatim into both D1 artifacts.
+
+**Tests**
+- **167 tests green** (142 pipeline + 25 worker; up from 138 + 10).
+- `worker/tests/http.test.ts` (new) covers CORS fail-closed, JSON `null`
+  bodies and the public config endpoint without a database.
+
+**Not fixed**
+- G1/G2/G3 are still absent. In-domain unanswerable questions still retrieve
+  and are answered.
+- No per-IP caps or WAF rule; Turnstile is secret-gated.
+
+---
+
+## 2026-10-31 — G1 scope classifier: built, measured, **held**
+
+**Built**
+- `pipeline/lib/scope.ts` — lexical features (normalized unigrams + bigrams,
+  both Persian ZWNJ forms) shared by training and inference; inference is a
+  sparse dot product plus sigmoid, so it runs in the Worker with no provider.
+- `pipeline/train-scope.ts` — class-balanced sparse logistic regression,
+  grouped 70/15/15 split by author topic, threshold chosen on calibration to
+  maximize negative refusal subject to Quran recall ≥ 97%.
+- `pipeline/tools/{assemble-scope,augment-scope,eval-scope}.ts` — audited
+  assembly, 594 template-controlled questions (P1 positives + hard negatives
+  using the same surface frames), and a holdout scorer that prints aggregate
+  rates only.
+- Training set: **1,225 items** (514 Quran, 201 fiqh, 178 history,
+  178 other Islamic, 154 OOD), committed as `eval/scope-train.json`.
+  AI-generated and AI-audited; **not human-reviewed**.
+
+**Measured**
+
+| split | Quran recall | negative refusal | AUC |
+|---|---:|---:|---:|
+| calibration (threshold 0.010) | 98.5% (n=194) | 51.2% (n=160) | 0.929 |
+| test | 95.5% (n=134) | 64.6% (n=178) | 0.903 |
+| **independent holdout** | **92.5%** (EN 95.0%, FA **90.0%**) | 81.0% (n=100) | — |
+
+**Decision: do not wire G1.** Both languages miss the pre-registered 97%
+Quran-recall target on the untouched holdout. A gate that refuses 10% of valid
+Persian Quran questions trades one visible failure for a worse invisible one.
+`worker/src/ask.ts` keeps the placeholder and performs no scope refusal.
+
+**What the failure taught**
+- The lexical boundary is **not stable**: cleaning the training data moved the
+  operating point from 96.3% → 92.5% Quran recall and 66% → 81% negative
+  refusal. Small, defensible data edits move the shipped refusal rate by
+  several points.
+- The pilot number (98.5%) was inflated by having inspected pilot misses while
+  adding templates. The holdout is the honest estimate.
+- `eval/scope-holdout.json` (90 pairs / 180 items) is committed so the refusal
+  is reproducible, and marked **burned**: never tune on it.
+
+Full record: `docs/g1-scope.md`.
+
+---
+
+## 2026-10-31 — Blind eval set frozen; licensing inventory
+
+**Blind set**
+- 50 bilingual pairs / 100 items, authored independently of the retriever and
+  pilot, then frozen: `eval/blind.json` (`_meta.freeze_sha256`
+  `9bed798b…`). Composition: 25 direct, 8 paraphrase, 9 in-domain
+  unanswerable, 6 OOD, 2 adversarial.
+- Protocol in `docs/blind-set.md`; `pipeline/tools/{assemble-blind,
+  validate-blind,review-packet}.ts` enforce composition, validate the frozen
+  file, and generate the scholar packet.
+- Status: **AI-AUTHORED, PENDING SCHOLAR REVIEW.** No retrieval metric may be
+  quoted from it until the review passes.
+- The review packet (`docs/blind-review.md`) contains full verse text in all
+  three editions and is generated on demand; it is **gitignored** so a public
+  repo does not redistribute the reviewer-only packet.
+
+**Licensing**
+- `docs/licensing.md` — file-by-file inventory with source hashes, edition
+  versions, the seven QuranEnc conditions, the Tanzil notice requirements, and
+  the explicit never-ship list. Engineering inventory, not legal advice; legal
+  review remains a launch requirement.
+
+**Next action**
+- Scholar review of the blind set, or G2 (out-of-domain floor only) as a
+  narrower launch gate. G1 stays parked until a semantic feature or a larger
+  human-authored positive set exists.
+
+---
+
 ## Stage tracker
 
 | Stage | Scope | Status |
 |---|---|---|
-| **M0** | Vertical slice — data pinning ✅, basmala segmentation ✅, footnote policy ✅, Persian normalizer + Finglish ✅, reference parser + fuzz ✅, 100-item blind bilingual eval with scholar review | 🟡 in progress (5/6) |
-| **M1** | Core product, zero AI — D1 + FTS5, RRF, G0–G3 gates, verse cards, refusal copy | ⬜ |
-| **M2** | UI — Astro, EN/FA routing, RTL, verse pages, PWA, headers, sitemap | ⬜ |
+| **M0** | Vertical slice — data pinning ✅, basmala segmentation ✅, footnote policy ✅, Persian normalizer + Finglish ✅, reference parser + fuzz ✅, 100-item blind bilingual eval with scholar review | 🟡 in progress (5/6 — blind set frozen, review pending) |
+| **M1** | Core product, zero AI — D1 + FTS5, RRF, G0–G3 gates, verse cards, refusal copy | 🟡 slice 1 done — answer path complete; G1 held (not wired), G2/G3 missing |
+| **M2** | UI — Astro, EN/FA routing, RTL, verse pages, PWA, headers, sitemap | 🟡 slice 1 done — static EN/FA/RTL UI; no PWA/sitemap/Astro yet |
 | **M3** | Dense retrieval — bge-m3 build-time embeddings, 512-bit codes, Hamming + int8 rerank | ⬜ |
 | **M4** | Concept cards — 400–800 concepts, offline generation, human review | ⬜ |
 | **M5** | Optional runtime LLM — provider cascade, quota ledger, citation validator | ⬜ |
@@ -465,6 +612,13 @@ Split by answer type at k=5: **direct 36.0% / 16.9% recall** (n=50), **paraphras
 | 2026-10-31 | concept layer, unweighted fusion | paraphrase 0.0% → 12.5%, **direct 36.0% → 18.0%** | acceptance FAIL; concept lists drowned literal precision |
 | 2026-10-31 | concept RRF weight sweep | 0.05–0.15 plateau: hit@5 28.8%, direct 36.0%, paraphrase 6.3% | weight **0.1** chosen by mechanism, not argmax; tuned on the pilot — provisional |
 | 2026-10-31 | concept expansion effect on refusal signals | `nHits` 0.645 → 0.661; OOD 0.846 → 0.868; in-domain 0.551 → 0.564; adversarial 0.470 → 0.477 | no degradation; in-domain still chance |
+| 2026-10-31 | G1 lexical scope — calibration | Quran recall 98.5% (n=194), negative refusal 51.2% (n=160), AUC 0.929 | threshold 0.010 |
+| 2026-10-31 | G1 lexical scope — test | Quran recall 95.5% (n=134), negative refusal 64.6% (n=178), AUC 0.903 | same model |
+| 2026-10-31 | **G1 lexical scope — independent holdout** | Quran **92.5%** (EN 95.0%, FA **90.0%**); non-Quran refused 81.0% (n=100) | **fails 97% target — held, not wired**; holdout burned |
+| 2026-10-31 | D1 full-surah range `2:1-286` | answered with 5 cards, no 500 | one `BETWEEN` query replaces per-ayah placeholders (D1 100-param cap) |
+| 2026-10-31 | pilot retrieval after ۀ fold + verbatim segments | hit@5 28.8%, direct 34.0%, paraphrase 12.5%, MRR 0.215 | regenerated `eval/report.md`; supersedes the 27.3% rows for current code |
+| 2026-10-31 | D1/FTS5 parity, same code | hit@5 30.3%, direct 34.0%, paraphrase 18.8%, MRR 0.229, 12.3 ms/item | `npm run eval:d1` |
+| 2026-10-31 | full test suite | **167 pass, 0 fail** (142 pipeline + 25 worker) | `npm test` |
 
 ---
 
