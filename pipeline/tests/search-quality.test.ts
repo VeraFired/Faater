@@ -217,3 +217,52 @@ test('a query with content words is not answered by frame-term hits alone', asyn
     )
   }
 })
+// ---------------------------------------------------------------------------
+// Concept expansion — the cross-lingual bridge
+// ---------------------------------------------------------------------------
+
+test('concept synonyms retrieve a verse the query wording never reaches', () => {
+  // The literal query "charity" appears in no document here: the English verse
+  // says "spend ... wealth" and the Arabic verse says «صدقه». Only the concept
+  // list connects them. This is the mechanism the paraphrase eval measures.
+  const empty = { segments: [], footnotes: [], searchText: '', searchTextJoined: '' }
+  const data: RetrieverData = {
+    verses: [
+      { ref: '1:1', surah: 1, ayah: 1, arabic: 'صدقه', arabicNorm: 'صدقه', bodyNorm: 'صدقه', basmala: null },
+      { ref: '1:2', surah: 1, ayah: 2, arabic: 'الصبر', arabicNorm: 'الصبر', bodyNorm: 'الصبر', basmala: null },
+      {
+        ref: '1:3', surah: 1, ayah: 3, arabic: 'شيء', arabicNorm: 'شيء', bodyNorm: 'شيء', basmala: null,
+      },
+    ],
+    basmala: { text: 'بسم الله الرحمن الرحيم', norm: 'بسم الله الرحمن الرحيم', ref: '1:0' },
+    surahs: [
+      { index: 1, ayahs: 3, nameAr: 'الفاتحة', nameEn: 'Al-Fatihah', nameTranslit: 'Al-Faatiha', nameFa: 'فاتحه', nameFaAlt: null },
+    ],
+    en: {
+      '1:1': { ...empty, searchText: 'a book of guidance', searchTextJoined: 'a book of guidance' },
+      '1:2': { ...empty, searchText: 'patience and steadfastness', searchTextJoined: 'patience and steadfastness' },
+      '1:3': { ...empty, searchText: 'spend their wealth in the way of god', searchTextJoined: 'spend their wealth in the way of god' },
+    },
+    fa: {},
+    lexicon: {
+      concepts: [
+        {
+          id: 'charity', fa: 'صدقه', en: 'charity', keys: ['sadaqe'],
+          synonyms: { en: ['spend', 'wealth'], fa: ['صدقه'], faJoined: ['صدقه'], ar: ['صدقه'] },
+        },
+        { id: 'patience', fa: 'صبر', en: 'patience', keys: ['sabr'] },
+      ],
+      names: [],
+      surahAliases: [],
+    },
+  }
+
+  const literal = new Retriever(data, { conceptExpansion: false }).search('charity')
+  assert.deepEqual(literal, [], 'literal retrieval should find nothing for this wording')
+
+  const expanded = new Retriever(data, { conceptExpansion: true }).search('charity')
+  const refs = expanded.map((h) => h.ref)
+  assert.ok(refs.includes('1:3'), `expected the "spend wealth" verse, got ${refs.join(', ')}`)
+  assert.ok(refs.includes('1:1'), `expected the Arabic «صدقه» verse via the concept bridge, got ${refs.join(', ')}`)
+  assert.ok(!refs.includes('1:2'), `patience must not be pulled in, got ${refs.join(', ')}`)
+})

@@ -174,3 +174,63 @@ Run `npm run eval` to reproduce. Current findings, which constrain the design:
 
 Anything that contradicts these findings must come from a set large enough to
 detect the contradiction. The pilot is not.
+
+---
+
+## 9. Ablating the concept layer
+
+Concept expansion is a hypothesis: that synonym lists let a user's vocabulary
+meet a translator's. It must be measured against its own absence, on the same
+set, with the same code:
+
+```bash
+npm run eval -- --no-concepts   # literal retrieval + RRF only
+npm run eval                    # + concept lists fused by RRF
+```
+
+Acceptance rule, fixed before looking at the result:
+
+- **paraphrase hit@5 must rise** — that is the only reason the layer exists;
+  its baseline is 0.0% (0/16);
+- **direct hit@5 must not fall by more than 2 percentage points** — expansion
+  that buys paraphrase recall with literal precision is a bad trade;
+- every added term must be corpus-verified (`pipeline/tools/df.ts`): a term with
+  df=0 is dead, and a term in more than half the verses cannot discriminate.
+
+The layer ships **unreviewed** and is labelled as such in `lexicon.json`. It is
+search vocabulary, never display text, so a wrong term costs recall — it can
+never put a wrong word in front of a user.
+
+### Measured result (2026-10-31, pilot — provisional)
+
+Fusing the concept lists at the **same weight as a literal field** failed the
+rule: paraphrase rose to 12.5% but direct hit@5 fell 36.0% → 18.0%.
+
+`rrf()` therefore takes per-list weights. Concept lists fuse at **0.1**; the
+literal `ar` / `en` / `fa` lists stay at 1.0. At 0.1, a concept list's rank-1
+contribution is `0.1/61 ≈ 0.0016` against a literal list's `1/61 ≈ 0.0164`, so a
+concept can only promote verses literal retrieval missed or ranked low.
+
+| weight | hit@5 | direct hit@5 | paraphrase hit@5 | MRR |
+|---:|---:|---:|---:|---:|
+| 0.05–0.15 | 28.8% | 36.0% | 6.3% | 0.212–0.228 |
+| 0.3 | 25.8% | 32.0% | 6.3% | 0.178 |
+| 1.0 | 16.7% | 18.0% | 12.5% | 0.146 |
+| 0 (off) | 27.3% | 36.0% | 0.0% | 0.199 |
+
+At 0.1 the acceptance rule passes: paraphrase **0.0% → 6.3%**, direct **36.0%
+→ 36.0%**, gold recall@5 +1.1 pt, MRR +2.6 pt. Refusal signals did not degrade
+(`nHits` AUC 0.645 → 0.661; in-domain unanswerable 0.551 → 0.564, still chance).
+
+Two cautions are part of the result, not footnotes:
+
+1. **The weight was selected on the same pilot it is measured on.** One
+   paraphrase item is 6.3 points. Report the direction, never the effect size,
+   until the blind set confirms it.
+2. **0.05–0.15 is a plateau**, so 0.1 is chosen for its mechanism (an order of
+   magnitude below a literal field), not because it maximised the sweep. If a
+   future edit moves the plateau, choose again by mechanism and record it.
+
+```bash
+npm run ablate -- --sweep   # weight sweep, same set, same code
+```

@@ -15,7 +15,8 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { finglishKey, translitKeys } from './lib/finglish.ts'
-import { normalize } from './lib/normalize.ts'
+import { normalize, normalizeJoined } from './lib/normalize.ts'
+import { foldEnglish } from './lib/stopwords.ts'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const BUILD = join(ROOT, 'data', 'build')
@@ -49,6 +50,17 @@ async function main(): Promise<void> {
     concepts: Array<{ id: string; fa: string; en: string; keys: string[] }>
     names: Array<{ id: string; fa: string; en: string; keys: string[] }>
   }
+
+  // Synonyms are optional while the layer is being built: absence must not
+  // break the build, but a malformed file must.
+  const synonymsRaw = await readFile(join(LEX, 'synonyms.json'), 'utf8').catch(() => null)
+  const synonymsFile = synonymsRaw
+    ? (JSON.parse(synonymsRaw) as {
+        _note: string
+        _review: string
+        concepts: Array<{ id: string; en: string[]; fa: string[]; ar: string[] }>
+      })
+    : null
 
   // ---- Persian surah names ------------------------------------------------
   if (faFile.surahs.length !== EXPECTED_SURAHS) {
@@ -116,22 +128,65 @@ async function main(): Promise<void> {
   }
   const overlaps = [...owners.entries()].filter(([, ids]) => ids.length > 1)
 
+  // ---- Search synonyms ----------------------------------------------------
+  // Search-only keys: normalized exactly the way the index and query are, so
+  // an expansion can never fail to meet its own document. Nothing here is
+  // displayed; a wrong term costs recall, never a visible claim.
+  const conceptIds = new Set(finglish.concepts.map((c) => c.id))
+  const synonymsById = new Map<
+    string,
+    { en: string[]; fa: string[]; faJoined: string[]; ar: string[] }
+  >()
+  if (synonymsFile) {
+    for (const entry of synonymsFile.concepts) {
+      if (!conceptIds.has(entry.id)) {
+        fail(`synonyms.json references unknown concept: ${entry.id}`)
+      }
+      if (synonymsById.has(entry.id)) fail(`duplicate synonyms for concept: ${entry.id}`)
+      const clean = (terms: string[]) => [...new Set(terms.map((t) => t.trim()).filter(Boolean))]
+      const faTerms = clean(entry.fa)
+      const s = {
+        en: [...new Set(clean(entry.en).map((t) => normalize(foldEnglish(t))))].filter(Boolean),
+        fa: [...new Set(faTerms.map((t) => normalize(t)))].filter(Boolean),
+        faJoined: [...new Set(faTerms.map((t) => normalizeJoined(t)))].filter(Boolean),
+        ar: [...new Set(clean(entry.ar).map((t) => normalize(t)))].filter(Boolean),
+      }
+      if (!s.en.length && !s.fa.length && !s.ar.length) {
+        fail(`concept ${entry.id} has no usable synonym in any language`)
+      }
+      synonymsById.set(entry.id, s)
+    }
+    for (const c of finglish.concepts) {
+      if (!synonymsById.has(c.id)) {
+        fail(`synonyms.json is missing concept: ${c.id}`)
+      }
+    }
+  }
+
+  const concepts = finglish.concepts.map((c) => {
+    const synonyms = synonymsById.get(c.id)
+    return synonyms ? { ...c, synonyms } : { ...c }
+  })
+
   const artifact = {
     version: '1.0.0',
     notes: {
       persianNames: faFile._note,
       persianNamesReview: faFile._review,
       finglish: finglish._note,
+      synonyms: synonymsFile?._note ?? null,
+      synonymsReview: synonymsFile?._review ?? null,
     },
     counts: {
       surahs: surahs.length,
-      concepts: finglish.concepts.length,
+      concepts: concepts.length,
+      conceptsWithSynonyms: synonymsById.size,
       names: finglish.names.length,
       aliasKeys: owners.size,
       overlappingKeys: overlaps.length,
     },
     surahs,
-    concepts: finglish.concepts,
+    concepts,
     names: finglish.names,
     surahAliases,
     overlappingKeys: overlaps.map(([key, ids]) => ({ key, ids })),
@@ -143,7 +198,7 @@ async function main(): Promise<void> {
 
   console.log('[build-lexicon] OK')
   console.log(`  surahs        ${surahs.length} (Persian names: ${faFile._review})`)
-  console.log(`  concepts      ${finglish.concepts.length}`)
+  console.log(`  concepts      ${concepts.length} (synonyms: ${synonymsById.size})`)
   console.log(`  proper names  ${finglish.names.length}`)
   console.log(`  alias keys    ${owners.size}`)
   if (overlaps.length) {

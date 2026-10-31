@@ -228,12 +228,14 @@ export function searchField(
  * Reciprocal Rank Fusion. `k` damps the influence of head ranks; 60 is the
  * value from the original RRF paper and the one our plan records.
  */
-export function rrf(lists: RankedDoc[][], k = 60): RankedDoc[] {
+export function rrf(lists: RankedDoc[][], k = 60, weights?: number[]): RankedDoc[] {
   const fused = new Map<number, number>()
-  for (const list of lists) {
-    for (let rank = 0; rank < list.length; rank++) {
-      const doc = list[rank].doc
-      fused.set(doc, (fused.get(doc) ?? 0) + 1 / (k + rank + 1))
+  for (let i = 0; i < lists.length; i++) {
+    const weight = weights?.[i] ?? 1
+    if (!weight) continue
+    for (let rank = 0; rank < lists[i].length; rank++) {
+      const doc = lists[i][rank].doc
+      fused.set(doc, (fused.get(doc) ?? 0) + weight / (k + rank + 1))
     }
   }
   return [...fused.entries()]

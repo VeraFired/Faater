@@ -238,6 +238,58 @@ Three separate matching problems produced the same class of silent miss, and the
 
 ---
 
+## ADR-019 — Concept synonyms are search-only, and fuse at weight 0.1
+**Date:** 2026-10-31
+
+**Problem.** Lexical retrieval cannot bridge wording it has never seen: the pilot's
+paraphrase slice scored **0/16 at hit@5**. A user asking "charity" should reach verses
+about «صدقه» / "spend their wealth", and no amount of BM25 tuning produces that bridge.
+
+**Decision.**
+1. A concept synonym file (`data/lexicon/synonyms.json`) exists per concept: EN, FA
+   (split and ZWNJ-joined), and Arabic terms. It is **search-only metadata**. Synonyms are
+   never displayed, never used in an answer, and never presented as meaning. The file is
+   labelled `_review: UNREVIEWED` until a native reviewer passes it.
+2. Every term was verified against the corpus with `pipeline/tools/df.ts` before shipping:
+   terms with `df=0` (dead), `df > 50%` (no signal), or the wrong sense were dropped —
+   269 of 682 candidates. A concept with no usable term in any language fails the build.
+3. Concept matches generate **separate** BM25 lists per field (`concept:ar`, `concept:en`,
+   `concept:fa`), not a query concatenation. Each list keeps its own language statistics.
+4. Concept lists are fused into RRF at **weight 0.1**; literal field lists stay at 1.0.
+   At 0.1, a concept list's rank-1 contribution is `0.1/61 ≈ 0.0016` against a literal
+   list's `1/61 ≈ 0.0164`. A concept can therefore only promote a verse that literal
+   retrieval missed or ranked low — it cannot rewrite the literal head.
+5. Expansion is **on by default**; `--no-concepts` and `conceptExpansion: false` exist for
+   ablation and rollback.
+
+**Why weight 0.1, and why that is not an overfit claim.** Unweighted fusion was measured
+first and failed the pre-registered rule: paraphrase rose to 12.5% but direct hit@5 fell
+from 36.0% to 18.0%. The weights 0.05–0.15 form a **plateau with identical retrieval and
+refusal numbers**, so 0.1 is chosen for its mechanism (an order of magnitude below a
+literal field), not because it was the sweep maximum. Acceptance at 0.1: paraphrase
+0.0 → 6.3%, direct 36.0 → 36.0%, MRR 0.199 → 0.224, overall hit@5 +1.5 pt.
+
+**Rejected alternatives.**
+- **Unweighted concept fusion** — measured; destroys literal precision (ADR-018's
+  "expansions are additive" does not mean "expansions are equal").
+- **Concatenating synonyms into the query string** — a long synonym tail inflates term
+  frequencies and lets one field's concept list dominate every other list.
+- **Showing synonyms or using them in copy** — they are unreviewed guesses about wording;
+  displaying one would put an unverified interpretation in front of a user.
+- **Request-time LLM query expansion** — puts a provider on the critical path, breaking
+  the one architectural rule.
+
+**Consequences.**
+- The weight was selected on the pilot set and is measured on the same set. With 16
+  paraphrase items, one item is 6.3 points. **0.1 is provisional until the blind set.**
+  Report the direction, not the effect size.
+- The synonym file is versioned with the index. Any edit requires re-running the ablation;
+  any weight change requires recalibrating the refusal thresholds' surrounding analysis.
+- One paraphrase item bridged is a proof of mechanism, not a solved paraphrase problem.
+  Dense retrieval (M3) remains the intended fix for the rest.
+
+---
+
 ## Rejected ideas worth remembering
 
 - **118–235 MB in-browser ONNX model** — strands mobile and Iran-based users, ~2.6 TB/month at 100k cold loads.

@@ -211,7 +211,7 @@ export function sweep(
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`
 const ci = (i: Interval) => `[${pct(i.lower)}, ${pct(i.upper)}]`
 
-async function loadData(): Promise<RetrieverData> {
+export async function loadData(): Promise<RetrieverData> {
   const [corpus, en, fa, lexicon] = await Promise.all([
     readFile(join(ROOT, 'data', 'build', 'corpus.json'), 'utf8').then((s) => JSON.parse(s)),
     readFile(join(ROOT, 'data', 'build', 'translations.en.json'), 'utf8').then((s) => JSON.parse(s)),
@@ -383,12 +383,13 @@ function budgetOf(set: EvalSet): number | undefined {
   return undefined
 }
 
-function report(set: EvalSet, ev: ReturnType<typeof runEval>): string {
+function report(set: EvalSet, ev: ReturnType<typeof runEval>, conceptExpansion = true): string {
   const lines: string[] = []
 
   lines.push('# Retrieval eval report', '')
   lines.push(`Set: ${set._meta.name ?? '(unnamed)'} — ${set._meta.status ?? 'unspecified'}`)
-  lines.push(`Items: ${ev.results.length}`, '')
+  lines.push(`Items: ${ev.results.length}`)
+  lines.push(`Concept expansion: ${conceptExpansion ? 'on' : 'off (literal retrieval only)'}`, '')
 
   lines.push('## Category counts', '')
   const byCat = new Map<string, number>()
@@ -621,8 +622,12 @@ function report(set: EvalSet, ev: ReturnType<typeof runEval>): string {
 
 async function main() {
   const data = await loadData()
-  const retriever = new Retriever(data)
-  const setPath = process.argv[2] ?? join(ROOT, 'eval', 'pilot.json')
+  // Ablation switch: the concept layer is only justified by what it adds over
+  // its own absence, measured on the same set.
+  const noConcepts = process.argv.includes('--no-concepts')
+  const retriever = new Retriever(data, { conceptExpansion: !noConcepts })
+  const setArg = process.argv.slice(2).find((a) => !a.startsWith('--'))
+  const setPath = setArg ?? join(ROOT, 'eval', 'pilot.json')
   const set: EvalSet = JSON.parse(await readFile(setPath, 'utf8'))
   const budget = budgetOf(set) ?? 0.05
 
@@ -630,7 +635,7 @@ async function main() {
   const ev = runEval(set.items, retriever, 5, budget)
   const ms = performance.now() - t0
 
-  const text = report(set, ev)
+  const text = report(set, ev, !noConcepts)
   const outDir = join(ROOT, 'eval')
   await writeFile(join(outDir, 'report.md'), text + '\n')
   await writeFile(

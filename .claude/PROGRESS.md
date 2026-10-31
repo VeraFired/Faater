@@ -3,7 +3,7 @@
 Append-only. Date every entry. Record failures as loudly as successes.
 If a session dies mid-build, the next one resumes from this file alone.
 
-**Current status:** `M0 step 5c complete` — retriever + eval harness hardened through a 25-finding review; 132 tests green. Step 6 (blind bilingual eval with scholar review) is the remaining M0 item.
+**Current status:** `M0 step 5d complete` — concept synonym layer built and fused at a measured weight; 138 tests green. Step 6 (blind bilingual eval with scholar review) is the remaining M0 item.
 
 ---
 
@@ -295,6 +295,74 @@ Split by answer type at k=5: **direct 36.0% / 16.9% recall** (n=50), **paraphras
 
 ---
 
+## 2026-10-31 — M0 step 5d: concept synonym layer, fused at a measured weight
+
+**What was built**
+- `data/lexicon/synonyms.json`: **83 concepts**, 410 EN + 387 FA + 443 AR search terms.
+  Drafted against the real corpus and verified term-by-term: **269 candidate terms were
+  dropped** as dead (`df=0`), too common (>50% of documents), or wrong-sense. The build
+  fails on an unknown concept id, a duplicate, or a concept with no usable term.
+- `pipeline/tools/df.ts` — document-frequency probe used for that verification.
+- `pipeline/tools/merge-synonyms.ts` — validates a workflow draft against `finglish.json`
+  (the concept-id source of truth) and writes the artifact.
+- Synonyms are **search-only metadata, never displayed, labelled UNREVIEWED**. They cannot
+  put a word in front of a user; they can only move a verse into the candidate set.
+
+**The measurement that changed the design**
+- First ablation with concept lists fused at weight 1 (equal to a literal field):
+  paraphrase hit@5 **0.0% → 12.5%**, but direct hit@5 **36.0% → 18.0%** and MRR
+  0.199 → 0.146. Acceptance rule fixed in advance: paraphrase must rise **and** direct may
+  fall at most 2 points. **FAIL.**
+- `rrf()` now takes per-list weights. Concept lists are fused at **0.1**; literal
+  `ar`/`en`/`fa` lists stay at 1.0. At 0.1 a concept list's rank-1 document contributes
+  `0.1/61 ≈ 0.0016` against a literal list's `1/61 ≈ 0.0164`, so a concept can only
+  promote a verse literal retrieval missed or ranked low — it cannot rewrite the literal head.
+- Weight sweep (same pilot, same code):
+
+| weight | hit@5 | direct hit@5 | paraphrase hit@5 | MRR |
+|---:|---:|---:|---:|---:|
+| 0.05 | 28.8% | 36.0% | 6.3% | 0.221 |
+| 0.08 | 28.8% | 36.0% | 6.3% | 0.228 |
+| **0.1 (chosen)** | **28.8%** | **36.0%** | **6.3%** | **0.224** |
+| 0.15 | 28.8% | 36.0% | 6.3% | 0.212 |
+| 0.3 | 25.8% | 32.0% | 6.3% | 0.178 |
+| 0.4 | 21.2% | 24.0% | 12.5% | 0.160 |
+| 1.0 | 16.7% | 18.0% | 12.5% | 0.146 |
+| 0 (off) | 27.3% | 36.0% | 0.0% | 0.199 |
+
+- 0.05–0.15 is a **plateau with identical retrieval and refusal numbers**, so 0.1 is a
+  mechanism choice, not the argmax of noise. Acceptance at 0.1: paraphrase rises (+6.3 pt),
+  direct holds (+0.0 pt), overall hit@5 +1.5 pt, gold recall@5 +1.1 pt, MRR +2.6 pt. **PASS.**
+- Refusal signals did not degrade (concept lists could have lifted scores on unanswerable
+  questions): `nHits` AUC 0.645 → **0.661**; OOD 0.846 → 0.868; in-domain 0.551 → 0.564
+  (still chance); adversarial 0.470 → 0.477.
+
+**Honest limits**
+- The weight was selected on the same pilot set it is measured on. With 16 paraphrase items,
+  one item is 6.3 points. Treat 0.1 as **provisional** until the blind set; do not report
+  the +6.3 as an effect size.
+- One paraphrase item bridged. The layer is a proof of mechanism, not a solved problem.
+- Synonyms are unreviewed. Before shipping any concept card or showing a synonym anywhere,
+  a native reviewer must pass the whole file.
+
+**Bug found by the new tests**
+- `rrf()` inserted zero-weight documents into the fused map with score 0 — a weight-0 list
+  still changed the candidate set. Now skipped entirely. Pinned by
+  `pipeline/tests/fusion.test.ts` (weight scaling, zero weight, weight-0 ≡ expansion off,
+  and a guard that the default weight still bridges).
+
+**Tests / eval**
+- **138 tests green** (was 132). Full `npm run eval` re-run; report now prints
+  `Concept expansion: on`.
+- Report totals with concepts on: hit@5 28.8% [18.3, 41.3], hit@10 36.4%, hit@50 66.7%,
+  MRR 0.224; direct 36.0% / 17.6% recall; paraphrase 6.3% / 2.4%.
+
+**Next action**
+- Commit step 5d on `init`. Then M0 step 6 — blind set + scholar review — which remains
+  blocked on a human reviewer.
+
+---
+
 ## Stage tracker
 
 | Stage | Scope | Status |
@@ -337,6 +405,9 @@ Split by answer type at k=5: **direct 36.0% / 16.9% recall** (n=50), **paraphras
 | 2026-10-31 | pilot hit@5 by answer type | direct 36.0% (18/50), paraphrase **0.0%** (0/16) | pooling the two hid the paraphrase failure |
 | 2026-10-31 | false-refusal budget certification at pilot size | **uncertifiable**: 0 false refusals over 66 answerable items gives UCB 5.4% > 5% budget | needs 72 answerable items per language |
 | 2026-10-31 | should-refuse power, per language | 17 EN / 17 FA; zero-error UCB 19.5% each | 183 per language for 2%, 72 for 5% |
+| 2026-10-31 | concept layer, unweighted fusion | paraphrase 0.0% → 12.5%, **direct 36.0% → 18.0%** | acceptance FAIL; concept lists drowned literal precision |
+| 2026-10-31 | concept RRF weight sweep | 0.05–0.15 plateau: hit@5 28.8%, direct 36.0%, paraphrase 6.3% | weight **0.1** chosen by mechanism, not argmax; tuned on the pilot — provisional |
+| 2026-10-31 | concept expansion effect on refusal signals | `nHits` 0.645 → 0.661; OOD 0.846 → 0.868; in-domain 0.551 → 0.564; adversarial 0.470 → 0.477 | no degradation; in-domain still chance |
 
 ---
 

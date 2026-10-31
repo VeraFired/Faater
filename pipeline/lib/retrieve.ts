@@ -51,6 +51,19 @@ export interface CorpusSurah {
   nameFaAlt: string | null
 }
 
+export interface ConceptSynonyms {
+  en: string[]
+  fa: string[]
+  /** ZWNJ-joined Persian forms, for the second fa index key. */
+  faJoined: string[]
+  ar: string[]
+}
+
+export interface ConceptEntry extends LexiconEntry {
+  /** Search-only synonyms, curated and corpus-verified. Never displayed. */
+  synonyms?: ConceptSynonyms
+}
+
 export interface RetrieverData {
   verses: CorpusVerse[]
   basmala: { text: string; norm: string; ref: string }
@@ -58,7 +71,7 @@ export interface RetrieverData {
   en: Record<string, TranslationVerse>
   fa: Record<string, TranslationVerse>
   lexicon: {
-    concepts: LexiconEntry[]
+    concepts: ConceptEntry[]
     names: LexiconEntry[]
     surahAliases: LexiconEntry[]
   }
@@ -71,8 +84,27 @@ export interface Hit {
   fields: string[]
 }
 
+export interface RetrieverOptions {
+  /**
+   * Concept expansion is ON by default once the lexicon carries synonyms.
+   * The flag exists so the eval can ablate it: an expansion that cannot be
+   * measured against its own absence is indistinguishable from noise.
+   */
+  conceptExpansion?: boolean
+  /**
+   * RRF weight of a concept list relative to a literal field list.
+   *
+   * 1.0 lets a concept list outvote a literal match, which is measurably
+   * wrong: at weight 1 the pilot's direct hit@5 fell 18 points while
+   * paraphrase rose 12.5. The concept layer is a bridge, not a replacement.
+   */
+  conceptWeight?: number
+}
+
 export class Retriever {
   private readonly data: RetrieverData
+  private readonly conceptExpansion: boolean
+  private readonly conceptWeight: number
   private refs: string[]
   private readonly ar: FieldIndex
   private readonly en: FieldIndex
@@ -80,8 +112,10 @@ export class Retriever {
   private readonly refIndex: Map<string, number>
   private readonly surahRefs: SurahRef[]
 
-  constructor(data: RetrieverData) {
+  constructor(data: RetrieverData, options: RetrieverOptions = {}) {
     this.data = data
+    this.conceptExpansion = options.conceptExpansion ?? true
+    this.conceptWeight = options.conceptWeight ?? 0.1
     // The reference parser needs every spelling of a surah name; the corpus
     // supplies Arabic/English/Persian and the lexicon supplies the derived
     // Finglish aliases.
@@ -170,6 +204,116 @@ export class Retriever {
     return parseReference(query, this.surahRefs)
   }
 
+  /**
+   * Concepts whose label or synonym appears in the question.
+   *
+   * This is the bridge lexical retrieval cannot build on its own: "charity"
+   * and the translation's «spend their wealth» share no token, but both are
+   * search terms of the charity concept. Matching is whole-token (or a
+   * contiguous phrase), never substring — "sabrina" is not "sabr".
+   *
+   * At most `maxConcepts` are returned, longest trigger first: expanding with
+   * every vaguely-mentioned concept turns the query into noise.
+   */
+  private matchConcepts(query: string, maxConcepts = 2): ConceptEntry[] {
+    const enTokens = new Set(tokenize(normalize(foldEnglish(query))))
+    // The two Persian keys are separate token streams. Concatenating them
+    // would let a two-token trigger match across the split/joined boundary,
+    // which is not a phrase that occurs anywhere.
+    const faTokenSets = [
+      new Set(tokenize(normalize(query))),
+      new Set(tokenize(normalizeJoined(query))),
+    ]
+
+    const containsAll = (haystack: Set<string>, needle: string[]): boolean =>
+      needle.length > 0 && needle.every((t) => haystack.has(t))
+    const contains = (haystack: Set<string>[], needle: string[]): boolean =>
+      haystack.some((h) => containsAll(h, needle))
+
+    const scored: Array<{ concept: ConceptEntry; specificity: number }> = []
+    for (const concept of this.data.lexicon.concepts) {
+      const syn = concept.synonyms
+      // English triggers are matched against the folded English query; Persian
+      // and Arabic triggers against the same tokens the script fields use.
+      // A label like "heaven(s)" must not demand the token "s": the gloss is
+      // display-shaped, the trigger is search-shaped.
+      const label = (t: string) => t.replace(/\([^)]*\)/g, ' ')
+      const enTriggers = [label(concept.en), ...(syn?.en ?? [])]
+      const faTriggers = [label(concept.fa), ...(syn?.fa ?? [])]
+      const arTriggers = [...(syn?.ar ?? [])]
+
+      let best = 0
+      for (const t of enTriggers) {
+        const needle = tokenize(normalize(foldEnglish(t)))
+        if (needle.length > best && containsAll(enTokens, needle)) best = needle.length
+      }
+      for (const t of [...faTriggers, ...arTriggers]) {
+        const needle = tokenize(normalize(t))
+        if (needle.length > best && contains(faTokenSets, needle)) best = needle.length
+      }
+      if (best > 0) scored.push({ concept, specificity: best })
+    }
+
+    return scored
+      .sort((a, b) => b.specificity - a.specificity)
+      .slice(0, maxConcepts)
+      .map((s) => s.concept)
+  }
+
+  /**
+   * Rank lists built from a concept's synonym sets, one per script field.
+   *
+   * Kept as SEPARATE lists rather than appended to the query string: appended
+   * synonyms would count towards coverage, so a verse matching two of eight
+   * synonyms would look badly covered and sink below a verse matching one
+   * literal token. Fusing them through RRF keeps both signals intact.
+   */
+  private conceptLists(concepts: ConceptEntry[]): Array<{ name: string; ranked: RankedDoc[] }> {
+    if (!concepts.length) return []
+    const out: Array<{ name: string; ranked: RankedDoc[] }> = []
+
+    const arQ = concepts.flatMap((c) => c.synonyms?.ar ?? []).join(' ')
+    const enQ = concepts.flatMap((c) => [c.en, ...(c.synonyms?.en ?? [])]).join(' ')
+    const faQ = concepts
+      .flatMap((c) => [c.fa, ...(c.synonyms?.fa ?? []), ...(c.synonyms?.faJoined ?? [])])
+      .join(' ')
+
+    if (tokenize(arQ).length) {
+      out.push({
+        name: 'concept:ar',
+        ranked: searchField(this.ar, arQ, {
+          limit: 20,
+          expand: arabicVariants,
+          stopwords: STOPWORDS_FA,
+          frameTerms: FRAME_TERMS,
+        }),
+      })
+    }
+    if (tokenize(enQ).length) {
+      out.push({
+        name: 'concept:en',
+        ranked: searchField(this.en, enQ, {
+          limit: 20,
+          expand: englishVariants,
+          stopwords: STOPWORDS_EN,
+          frameTerms: FRAME_TERMS,
+        }),
+      })
+    }
+    if (tokenize(faQ).length) {
+      out.push({
+        name: 'concept:fa',
+        ranked: searchField(this.fa, faQ, {
+          limit: 20,
+          expand: arabicVariants,
+          stopwords: STOPWORDS_FA,
+          frameTerms: FRAME_TERMS,
+        }),
+      })
+    }
+    return out
+  }
+
   search(query: string, options: { limit?: number } = {}): Hit[] {
     const limit = options.limit ?? 20
 
@@ -207,9 +351,10 @@ export class Retriever {
     const q = this.fieldQueries(query)
     if (!tokenize(q.ar).length) return []
 
-    const lists: Array<{ name: string; ranked: RankedDoc[] }> = [
+    const lists: Array<{ name: string; ranked: RankedDoc[]; weight: number }> = [
       {
         name: 'ar',
+        weight: 1,
         ranked: searchField(this.ar, q.ar, {
           limit: 100,
           expand: arabicVariants,
@@ -224,6 +369,7 @@ export class Retriever {
       },
       {
         name: 'en',
+        weight: 1,
         ranked: searchField(this.en, q.en, {
           limit: 100,
           expand: englishVariants,
@@ -233,6 +379,7 @@ export class Retriever {
       },
       {
         name: 'fa',
+        weight: 1,
         ranked: searchField(this.fa, q.fa, {
           limit: 100,
           expand: arabicVariants,
@@ -245,9 +392,22 @@ export class Retriever {
       },
     ].filter((l) => l.ranked.length > 0)
 
+    // Concept expansion is a separate set of candidate lists, fused exactly
+    // like the literal ones. It is the only path by which an English question
+    // can reach a verse whose English translation uses different wording.
+    if (this.conceptExpansion) {
+      for (const l of this.conceptLists(this.matchConcepts(query))) {
+        if (l.ranked.length) lists.push({ ...l, weight: this.conceptWeight })
+      }
+    }
+
     if (!lists.length) return []
 
-    const fused = rrf(lists.map((l) => l.ranked))
+    const fused = rrf(
+      lists.map((l) => l.ranked),
+      60,
+      lists.map((l) => l.weight),
+    )
 
     // Record which fields contributed, so a Persian question answered from the
     // English index is visible rather than silent.

@@ -115,6 +115,17 @@ The top-5 for "charity" (57:18, 2:263) and "arrogance" (23:67, 7:206) are genuin
 
 **Consequence:** synonym/concept expansion was scheduled at M4. The evidence says it is needed before the slice is usable, because a user's vocabulary is not the translator's. Priority raised; the *mechanism* (query expansion from a reviewed concept table) should land with M1's retrieval, even if the full 400–800-card corpus stays at M4.
 
+**Update 2026-10-31 (step 5d).** The mechanism now exists: 83 concepts with corpus-verified synonyms, fused as separate BM25 lists at RRF weight 0.1. Measured on the same pilot: paraphrase hit@5 **0.0% → 6.3%** (one item), direct unchanged at 36.0%, MRR 0.224. Unweighted fusion was rejected because it bought 12.5% paraphrase by halving direct precision. This is a **proof of mechanism, not a fix**: 15/16 paraphrase items still miss. Dense retrieval (M3) remains the intended remedy.
+
+## 🟡 Concept synonyms are unreviewed — search-only, but still load-bearing
+The synonym file was drafted by agents and verified only for **corpus existence**, not for **sense**. `df.ts` proves a term occurs; it cannot prove «صدقه» is the right Arabic term for the concept "charity" in every verse it touches. Moving a wrong-sense verse into the candidate set is invisible until a human reads it.
+**Mitigations in place:** synonyms are never displayed; the file is labelled `_review: UNREVIEWED`; content rules already forbid interpreting.
+**Required before any ship:** a native EN + FA reviewer passes all 83 concepts; re-run the ablation after review, because edits change the measured weight plateau.
+
+## 🟡 The concept weight was tuned on the pilot it is measured on
+`conceptWeight = 0.1` was chosen from a sweep on `eval/pilot.json`. The 0.05–0.15 band is a plateau with identical numbers, which is why it is a mechanism choice rather than an argmax — but with **16 paraphrase items, one item is 6.3 points**, and the same set produced the number being quoted.
+**Rule:** report the direction, not the +6.3 pt effect size; do not treat 0.1 as validated until the blind set confirms it.
+
 ## 🟡 Evaluation is underpowered as originally scoped
 With 75 unanswerable items per language, one error is 1.33% — a "≤2% false answer" target cannot be measured. The original 2% / 10% / 95% targets were mutually inconsistent.
 **Measured power (2026-10-31, pilot):** 17 should-refuse items **per language** → a zero-error result still permits a **19.5%** true rate. The two languages are paired translations of the same questions and are never pooled: quoting a 34-item bound (10.3%) would pretend to a precision the design does not have. To claim an upper bound of 2% at 95% confidence with zero errors you need **183 unanswerable items per language**; for 5%, **72**.
