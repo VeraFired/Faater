@@ -321,6 +321,13 @@ html[dir="rtl"] .translation-label { text-align: right; }
 .site-footer p { margin: 0; }
 .muted { color: var(--muted); }
 
+.site-footer .credit { margin-top: 0.35rem; }
+.site-footer .credit a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
 .skeleton {
   height: 8.5rem;
   border-radius: var(--radius);
