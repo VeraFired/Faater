@@ -89,3 +89,18 @@ bm25 is its own statistic. Both are documented in `worker/src/retrieve.ts`.
 - `pipeline/build-d1.ts` — schema + seed generator
 - `pipeline/tools/eval-d1.ts` — parity check against the pilot
 - `worker/tests/ask.test.ts` — 10 contract tests against the real seed
+
+## Frontend
+
+`web/` is a zero-dependency static site (no build step) served by the same
+Worker through `[assets]` in `wrangler.toml`; `/api/*` runs the Worker first.
+
+- English and Persian, with `dir=rtl` and `lang` set per element.
+- Arabic is rendered first, verbatim; translations are labelled with the
+  edition title; footnotes are disclosed, not hidden.
+- Refusal and boundary copy comes from the API — the frontend never composes
+  religious text.
+- No analytics, no external fonts, no cookies.
+
+Persian UI copy is **UNREVIEWED**. It must be reviewed by a native speaker
+before launch.

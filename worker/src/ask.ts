@@ -20,6 +20,7 @@ import {
   containsMarker,
   type Lang,
 } from './config.ts'
+import { inScope, type ScopeModel } from '../../pipeline/lib/scope.ts'
 import {
   searchD1,
   type D1Database,
@@ -67,6 +68,7 @@ interface Meta {
   surahs: SurahMeta[]
   enEdition: { key: string; title: string }
   faEdition: { key: string; title: string }
+  scopeModel: ScopeModel | null
 }
 
 interface VerseRow {
@@ -89,7 +91,7 @@ async function loadMeta(db: D1Database): Promise<Meta> {
     metaCache = (async () => {
       const rows = await db
         .prepare(
-          "SELECT key, value FROM meta WHERE key IN ('lexicon','surahs','en_edition','fa_edition')",
+          "SELECT key, value FROM meta WHERE key IN ('lexicon','surahs','en_edition','fa_edition','scope_model')",
         )
         .bind()
         .all<{ key: string; value: string }>()
@@ -104,6 +106,9 @@ async function loadMeta(db: D1Database): Promise<Meta> {
         surahs: JSON.parse(get('surahs')) as SurahMeta[],
         enEdition: JSON.parse(get('en_edition')),
         faEdition: JSON.parse(get('fa_edition')),
+        scopeModel: map.has('scope_model')
+          ? (JSON.parse(get('scope_model')) as ScopeModel)
+          : null,
       }
     })().catch((err) => {
       metaCache = null
@@ -232,6 +237,15 @@ export async function ask(
 
   const meta = await loadMeta(db)
   const fiqh = containsMarker(query, FIQH_MARKERS)
+
+  // G1 — scope. The model is trained offline on lexical features and runs as a
+  // dot product; no provider is involved. When it is absent, the path falls
+  // back to retrieval-only refusal (weaker, never silently wrong).
+  if (meta.scopeModel && !inScope(meta.scopeModel, query)) {
+    return fiqh
+      ? { ...base, status: 'refused', reason: 'fiqh_no_verse', message: copy.fiqh_no_verse }
+      : { ...base, status: 'refused', reason: 'off_topic', message: copy.off_topic }
+  }
 
   const hits = await searchD1(db, meta.lexicon, meta.surahs, query, { limit: LIMITS.maxCards })
   const refs = hits.map((h) => h.ref)

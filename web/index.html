@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light dark" />
+  <title>Faater — ask the Quran</title>
+  <meta name="description" content="A free, bilingual (English/Persian) search over the Quran. Verses and translations only; no interpretation." />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap header-row">
+      <a class="brand" href="/" aria-label="Faater home">
+        <span class="brand-mark" aria-hidden="true">﷽</span>
+        <span class="brand-name">Faater</span>
+      </a>
+      <nav class="lang-switch" aria-label="Language">
+        <button type="button" data-lang="en" class="lang-btn" aria-pressed="true">English</button>
+        <button type="button" data-lang="fa" class="lang-btn" aria-pressed="false" lang="fa">فارسی</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero">
+      <h1 data-i18n="title">Ask the Quran</h1>
+      <p class="lede" data-i18n="lede">
+        A free search over the Quran in English and Persian. You get verses and
+        translations — never commentary, never a ruling.
+      </p>
+
+      <form id="ask-form" class="ask-form" autocomplete="off">
+        <label class="sr-only" for="q" data-i18n="label">Your question</label>
+        <div class="input-row">
+          <input id="q" name="q" type="search" maxlength="500" required
+                 data-i18n-placeholder="placeholder"
+                 placeholder="What does the Quran say about patience?" />
+          <button type="submit" id="submit" data-i18n="ask">Ask</button>
+        </div>
+        <p class="hint" data-i18n="hint">
+          It can only answer from Quranic text. If no relevant verse is found, it refuses.
+        </p>
+      </form>
+    </section>
+
+    <section id="status" class="status" hidden aria-live="polite"></section>
+    <section id="results" class="results" aria-live="polite"></section>
+
+    <section class="notice" id="trust">
+      <h2 data-i18n="trustTitle">How to read this</h2>
+      <ul>
+        <li data-i18n="trustArabic">The Arabic is the Quran, verbatim. Nothing on this site changes it.</li>
+        <li data-i18n="trustTranslation">A translation is interpretation, not the Quran. Each translation is labelled with its translator.</li>
+        <li data-i18n="trustNoTafsir">No tafsir and no explanation are shown. For meaning, consult a qualified scholar.</li>
+        <li data-i18n="trustLinks">Verse links go to quran.com and tanzil.net; the text here comes from Tanzil and QuranEnc.</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-row">
+      <p data-i18n="footer">Free to use. No accounts, no ads, no tracking.</p>
+      <p class="muted" data-i18n="footerLicense">
+        Quran text: Tanzil.net (CC BY 3.0). Translations: QuranEnc.com.
+      </p>
+    </div>
+  </footer>
+
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

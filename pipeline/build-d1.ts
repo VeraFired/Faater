@@ -71,6 +71,15 @@ const en = JSON.parse(await readFile(join(BUILD, 'translations.en.json'), 'utf8'
 const fa = JSON.parse(await readFile(join(BUILD, 'translations.fa.json'), 'utf8')) as Edition
 const lexicon = await readFile(join(BUILD, 'lexicon.json'), 'utf8')
 
+// The scope model is optional: the Worker falls back to retrieval-only refusal
+// when it is absent, which is honest but weaker.
+let scopeModel: string | null = null
+try {
+  scopeModel = await readFile(join(ROOT, 'data', 'scope-model.json'), 'utf8')
+} catch {
+  scopeModel = null
+}
+
 /** Index text: every token expanded exactly the way the in-memory index does. */
 const expandText = (text: string, expand: (t: string) => string[]): string =>
   tokenize(text)
@@ -199,6 +208,7 @@ seedParts.push(
   `INSERT INTO meta VALUES ('surahs', ${q(JSON.stringify(corpus.surahs))});`,
   `INSERT INTO meta VALUES ('en_edition', ${q(JSON.stringify(en.edition))});`,
   `INSERT INTO meta VALUES ('fa_edition', ${q(JSON.stringify(fa.edition))});`,
+  ...(scopeModel ? [`INSERT INTO meta VALUES ('scope_model', ${q(scopeModel)});`] : []),
   'COMMIT;',
 )
 
