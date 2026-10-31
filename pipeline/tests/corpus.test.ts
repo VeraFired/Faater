@@ -51,7 +51,31 @@ test('known anchoring verses are present and intact', () => {
 test('every verse has a non-empty normalized search key', () => {
   for (const v of corpus.verses) {
     assert.ok(v.arabicNorm.length > 0, `empty norm at ${v.ref}`)
-    assert.ok(v.arabicVariants.length > 0, `no variants at ${v.ref}`)
+    if (v.basmalaIsWholeVerse) {
+      // 1:1 has no body: its whole text is carried by the basmala document, and
+      // duplicating it into the per-verse keys would re-create the 113x
+      // document-frequency inflation the pseudo-document exists to avoid.
+      assert.equal(v.bodyNorm, '', 'whole-verse basmala must have an empty bodyNorm')
+      assert.equal(v.arabicVariants.length, 0, 'whole-verse basmala must not carry body variants')
+      assert.ok(corpus.basmalaDocument.variants.length > 0, 'basmala document needs variants')
+    } else {
+      assert.ok(v.bodyNorm.length > 0, `empty bodyNorm at ${v.ref}`)
+      assert.ok(v.arabicVariants.length > 0, `no variants at ${v.ref}`)
+    }
+  }
+})
+
+test('the basmala is never re-embedded in a surah-opening search key', () => {
+  // The variants field is derived from `body`, not `arabic`. When it was
+  // derived from `arabic`, all 112 surah openings carried the basmala in
+  // their Persian-tolerant search key — the same defect bodyNorm avoids,
+  // hiding in a second field.
+  const openings = corpus.verses.filter((v) => v.basmala && !v.basmalaIsWholeVerse)
+  assert.equal(openings.length, 112)
+  for (const v of openings) {
+    for (const key of v.arabicVariants) {
+      assert.ok(!key.includes('بسم'), `basmala leaked into variants at ${v.ref}`)
+    }
   }
 })
 

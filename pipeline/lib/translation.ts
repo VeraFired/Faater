@@ -64,7 +64,17 @@ export function parseFootnotes(raw: string): Footnote[] {
     .filter((f) => f.n >= 0)
 }
 
-export function parseTranslation(text: string, footnotesRaw: string): ParsedTranslation {
+/**
+ * @param fold Language-specific fold applied to the prose BEFORE normalize().
+ *   English needs it: normalize() turns apostrophes into spaces, so «Qur'an»
+ *   indexes as the two tokens "qur an" and can never match a user typing
+ *   "quran". Folding first makes them the same token.
+ */
+export function parseTranslation(
+  text: string,
+  footnotesRaw: string,
+  fold: (s: string) => string = (s) => s,
+): ParsedTranslation {
   const footnotes = parseFootnotes(footnotesRaw)
   const known = new Set(footnotes.map((f) => f.n))
   const segments: Segment[] = []
@@ -95,12 +105,16 @@ export function parseTranslation(text: string, footnotesRaw: string): ParsedTran
     .map((s) => (s as { v: string }).v)
     .join(' ')
 
+  // The fold applies to the search key only; segments and footnotes keep the
+  // publisher's exact characters.
+  const searchable = fold(prose)
+
   return {
     segments,
     footnotes,
     unresolvedNotes: [...unresolved].sort((a, b) => a - b),
-    searchText: normalize(prose),
-    searchTextJoined: normalizeJoined(prose),
+    searchText: normalize(searchable),
+    searchTextJoined: normalizeJoined(searchable),
   }
 }
 

@@ -79,8 +79,46 @@ Sahih International (Noor International Center) and Rowwad (Iranian) carry insti
 Translation choice, verse selection, context windows and the sensitivity taxonomy are all interpretive acts.
 **Mitigation:** scholar board with credentials and madhhab balance; correction SLA; pre-launch review of every sensitive card.
 
+## 🔴 Retrieval score cannot refuse — measured, not assumed
+The M0 pilot (100 items) measured every candidate gate signal (top, gap, ratio, top3mean, top5sum, z, nHits, fieldCount) for separation between answerable and should-refuse items.
+
+| refusal type | n | raw AUC | refusal recall at ~4.5% false refusal |
+|---|---:|---:|---:|
+| out-of-domain | 12 | 0.846 | 66.7% (8/12) |
+| **in-domain unanswerable** | 18 | **0.551** | 11.1% (2/18) |
+| adversarial | 4 | 0.470 | 0.0% (0/4) |
+
+The best signal is **`nHits` (query coverage) at 0.645** — weak, and it is capped by the 50-candidate search limit. Every score-shape signal (`top`, `gap`, `ratio`, `top3mean`, `top5sum`, `fieldCount`) is **0.505–0.543 — indistinguishable from chance**.
+
+**The 0.551 is the important number: in-domain unanswerable questions are at chance.** "How many rak'ahs are in the Fajr prayer?" retrieves as much evidence as "What does the Quran say about patience?", because it is dense with prayer vocabulary. At the same false-refusal rate that catches 67% of out-of-domain questions, a threshold catches **11%** of these.
+
+**Consequence:** G1 (scope classification on the question) is mandatory and cannot be replaced by a retrieval threshold. G2 remains a floor for the out-of-domain case only. This is now evidence rather than a design assumption.
+
+> **Correction 2026-10-31 (step 5c).** An earlier run reported **0.337 — below chance** for this row.
+> That was an artifact: the Arabic field was answering Persian questions with verses that only
+> mentioned «قرآن», which inflated in-domain evidence. After the frame-only fix the honest value
+> is 0.551. The conclusion is unchanged and cleaner: no separation, not inverted separation.
+
+## 🔴 Lexical retrieval cannot bridge paraphrase — the concept layer is load-bearing
+Pilot hit rate on gold refs: **hit@5 27.3%, hit@10 36.4%, hit@20 50.0%, hit@50 66.7%**. A third of gold verses are not retrievable at all.
+
+Split by answer type at k=5, the aggregate is misleading and is now never quoted pooled:
+- **direct 36.0%** hit / 16.9% gold recall (n=50)
+- **paraphrase 0.0%** hit / 0.0% gold recall (n=16)
+
+Inspection shows these are **vocabulary mismatches, not ranking failures**:
+- the query says "charity"; the translation says *"spend their wealth"* (2:261)
+- the query says "alcohol"; the translation says *"intoxicants"*
+- the query says "modesty"; the translation says *"modest"* / *"guard their private parts"*
+
+The top-5 for "charity" (57:18, 2:263) and "arrogance" (23:67, 7:206) are genuinely about those topics — they are simply not the verses on the gold list. So hit@k here is a **lower bound**, and the gold lists are the weak part of the instrument.
+
+**Consequence:** synonym/concept expansion was scheduled at M4. The evidence says it is needed before the slice is usable, because a user's vocabulary is not the translator's. Priority raised; the *mechanism* (query expansion from a reviewed concept table) should land with M1's retrieval, even if the full 400–800-card corpus stays at M4.
+
 ## 🟡 Evaluation is underpowered as originally scoped
 With 75 unanswerable items per language, one error is 1.33% — a "≤2% false answer" target cannot be measured. The original 2% / 10% / 95% targets were mutually inconsistent.
+**Measured power (2026-10-31, pilot):** 17 should-refuse items **per language** → a zero-error result still permits a **19.5%** true rate. The two languages are paired translations of the same questions and are never pooled: quoting a 34-item bound (10.3%) would pretend to a precision the design does not have. To claim an upper bound of 2% at 95% confidence with zero errors you need **183 unanswerable items per language**; for 5%, **72**.
+**Also measured:** the *false-refusal* budget is not certifiable at pilot size either — 66 answerable items with **zero** false refusals gives a 95% upper bound of 5.4%, above the 5% target. The sweep therefore reports no certified operating point and labels the point-estimate optimum as illustrative.
 **Fix:** size the set to the target or report intervals; never quote point targets that the sample cannot support.
 
 ## 🟡 Worker is public and unauthenticated

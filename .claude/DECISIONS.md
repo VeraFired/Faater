@@ -196,6 +196,48 @@ Every emitted artefact embeds the edition, publisher, version, seven licence con
 
 ---
 
+## ADR-017 — Refusal is a classifier on the question, not a threshold on retrieval
+**Date:** 2026-10-31
+
+**Evidence.** The M0 pilot measured every candidate retrieval signal (top score, gap, ratio, top-3 mean, top-5 sum, z-score, hit count, field count) against 66 answerable and 34 should-refuse items.
+
+- Every score-shape signal scored **AUC 0.505–0.543** against the pooled refusal set — chance.
+- The best signal was **`nHits` (query coverage) at 0.645** — weak, and capped by the 50-candidate search limit.
+- Out-of-domain questions separate (AUC 0.846): they share no vocabulary with scripture.
+- **In-domain unanswerable questions score 0.551 — chance.** "How many rak'ahs are in the Fajr prayer?" retrieves as much evidence as "What does the Quran say about patience?" because it is saturated with prayer vocabulary. At the same false-refusal rate that catches 66.7% of OOD questions, the threshold catches 11.1% of these. Adversarial prompts are 0.470.
+
+> **Correction 2026-10-31 (step 5c).** An earlier run reported in-domain AUC **0.337 — worse
+> than chance**. That value was an artifact of the Arabic field answering Persian questions
+> with verses that merely mention «قرآن». After the frame-only fix the honest value is
+> 0.551. The decision below is unchanged and rests on the cleaner claim: no separation.
+
+**Decision.** G1 (scope) is a **classifier over the question**, and it is mandatory. G2 (retrieval floor) survives only as a cheap out-of-domain filter, never as the refusal decision. G3 (answerability) scores (question, verse) pairs rather than a single score.
+
+**Why this is not a preference.** A threshold that refuses "how many rak'ahs in Fajr" also refuses a large share of real questions, because the difference is not in the retrieval — it is in what the question asks for. No amount of score tuning can recover information the ranking does not contain.
+
+**Consequence for calibration.** The pilot's power analysis stands, per language: 17 should-refuse items can only bound the error rate at 19.5% even with zero errors. G1 cannot be validated on this set. The false-refusal budget is likewise uncertifiable — 66 answerable items with zero false refusals gives a 5.4% upper bound against a 5% target.
+
+---
+
+## ADR-018 — Search text is folded, never displayed; expansions are additive
+**Date:** 2026-10-31
+
+Three separate matching problems produced the same class of silent miss, and they share one principle.
+
+**1. English apostrophes and transliteration diacritics.** `normalize()` turns punctuation into spaces, so «Qur'an» becomes `qur` + `an`, and the Sahih International edition writes «qurān» with a macron (U+0101) and «ṣalāh» with dots below. Typing "quran" matched **0 of 6,236** English verses. `foldEnglish()` applies NFD decomposition, strips combining marks, then strips apostrophes and half-rings. Applied to **searchText only** — segments and footnotes keep the publisher's exact characters, which is what the no-modification condition requires.
+
+**2. Stopwords are a query-side filter, never an index filter.** The index keeps every token so contiguous-phrase matching still sees exact document text. Coverage is computed over terms with `df < n/2`, matching BM25's sign convention; the previous `idf > 0` test was true for "the" (3,958 of 6,236 verses) and made every short verse look well-covered.
+
+**3. Stopwords must be derived through the normalizer.** Persian sets written in Persian orthography can never match: `normalize()` folds ک→ك, ی→ي, آ→ا, so a literal «که» never equals the query token «كه». `STOPWORDS_FA` is built by running each entry through `normalizeJoined()`, producing exactly the token the tokenizer will emit. The ZWNJ-**split** form is deliberately NOT added: splitting «می‌توان» yields «توان» ("power/ability"), which silently deleted a content word from every query containing it. The split parts that genuinely are function words («مي», «گويد») are listed explicitly.
+
+**4. Frame terms are down-weighted (0.2), never deleted, and never sufficient alone.** "quran" names the corpus itself and cannot discriminate between verses; in "what does the Quran say about X" it is part of the question frame. Deleting it made «قرآن چیست» return unrelated verses, so it is down-weighted instead. Separately, a query that contains content words may not be answered by a field that matched **only** frame terms — that rule is what stopped the Arabic field answering «قرآن درباره ازدواج» with verses that merely mention «قرآن».
+
+**5. Expansions are additive.** Arabic light stemming, English inflection variants, and Finglish concept terms are added **alongside** the exact token, never replacing it. An over-eager expansion costs index space and a little noise; it can never lose an exact match. This is the same rule already used for Persian ZWNJ dual keys (ADR-016).
+
+**Regression risk this creates.** Every one of these is silent: the system keeps returning results, just the wrong ones. Behavioural tests are the only guard, and they must assert the safe direction rather than exact ranks.
+
+---
+
 ## Rejected ideas worth remembering
 
 - **118–235 MB in-browser ONNX model** — strands mobile and Iran-based users, ~2.6 TB/month at 100k cold loads.

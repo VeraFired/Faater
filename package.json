@@ -6,7 +6,8 @@
   "description": "Free, public, Qur'an-grounded Q&A system (EN + FA)",
   "scripts": {
     "pipeline": "node pipeline/build-corpus.ts && node pipeline/build-translations.ts && node pipeline/build-lexicon.ts",
-    "test": "node --test \"pipeline/tests/*.test.ts\""
+    "test": "node --test \"pipeline/tests/*.test.ts\"",
+    "eval": "node pipeline/eval.ts"
   },
   "engines": {
     "node": ">=24"

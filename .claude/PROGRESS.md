@@ -3,7 +3,7 @@
 Append-only. Date every entry. Record failures as loudly as successes.
 If a session dies mid-build, the next one resumes from this file alone.
 
-**Current status:** `M0 step 5 complete` — reference parser + fuzz, 96 tests green.
+**Current status:** `M0 step 5c complete` — retriever + eval harness hardened through a 25-finding review; 132 tests green. Step 6 (blind bilingual eval with scholar review) is the remaining M0 item.
 
 ---
 
@@ -158,6 +158,143 @@ If a session dies mid-build, the next one resumes from this file alone.
 
 ---
 
+## 2026-10-31 — M0 step 5b: vertical-slice retriever + eval harness
+
+Built so that step 6 has something real to evaluate. Not a step in the plan, but a prerequisite:
+a 100-item eval of a retriever that does not exist measures nothing.
+
+**Done**
+- `pipeline/lib/bm25.ts` — per-field BM25 with coverage weighting and a contiguous-phrase bonus; `rrf()` for fusion.
+- `pipeline/lib/retrieve.ts` — three fields (`ar` bodyNorm, `en` searchText, `fa` searchText+joined), Finglish expansion, direct-reference short-circuit, basmala shortcut.
+- `pipeline/lib/stem.ts` — conservative Arabic light stemming (dual-indexed) and English inflection variants.
+- `pipeline/lib/stopwords.ts` — EN + FA query-side stopwords, frame terms, English language markers, `foldEnglish`.
+- `pipeline/lib/stats.ts` — Clopper-Pearson, Wilson, beta quantile, AUC, `itemsForUpperBound`.
+- `pipeline/eval.ts` + `eval/pilot.json` — 100 pilot items (50 EN / 50 FA), signal extraction, AUC, threshold sweep, power check.
+- **118 tests green.** Index build ~300 ms for 6,236 verses × 3 fields.
+
+**Five defects the eval exposed — every one was silent**
+
+1. **English text was not matchable.** The translation writes «qurān» with a macron (U+0101) and «Qur'an» with an apostrophe; `normalize()` turns punctuation into spaces, so the token was `qur`+`an` or `qurān`. Typing "quran" matched **0 of 6,236** English verses. Fixed by folding NFD → strip combining marks → strip apostrophes, applied to the English **search** field only.
+2. **The Finglish expander hijacked English questions.** "What does the Quran say about patience?" had `quran` resolved as a Finglish key, injecting Persian «قرآن» into the Arabic field; `ar` and `fa` then agreed on six tiny verses containing «القرآن» and outvoted the English list in RRF. Fixed with an English-function-word language guard.
+3. **No stopwords, so the question frame won.** "say" appears in 647 English verses; «درباره» ("about") in only **12** Persian verses, which gives it a *high* idf — so every Persian question phrased «درباره X چه می‌گوید» returned those same 12 verses regardless of X. Rare is not informative.
+4. **Persian stopwords written in Persian orthography could never match.** `normalize()` folds ک→ك, ی→ي, آ→ا, so a set literal containing «که» never equals the query token «كه». The set is now derived through the normalizer, in both ZWNJ-split and joined forms.
+5. **Coverage counted stopwords as evidence.** `informative` was `idf > 0` on a clamped idf, which is true for almost every term; "the" (3,958 of 6,236 verses) scored as informative. Now `df < n/2`, matching BM25's sign convention.
+
+**Measured (pilot set, NOT blind-reviewed, NOT scholar-reviewed)**
+
+| metric | all | en | fa |
+|---|---:|---:|---:|
+| hit@5 | 27.3% | 30.3% | 24.2% |
+| hit@10 | 39.4% | 45.5% | 33.3% |
+| hit@20 | 51.5% | 51.5% | 51.5% |
+| hit@50 | 68.2% | 69.7% | 66.7% |
+| MRR (50 candidates) | 0.198 | — | — |
+
+> **SUPERSEDED 2026-10-31 by step 5c.** hit@10 / hit@20 / hit@50 and every AUC below changed
+> when the frame-term defect was fixed (hit@10 36.4%, hit@20 50.0%, hit@50 66.7%). The 5c
+> entry is the current measurement.
+
+**The decisive result: retrieval score cannot refuse.**
+- Global AUC for the score-shape signals (top, gap, ratio, top3mean, top5sum, fieldCount) is **within noise of 0.5**.
+- Out-of-domain questions separate weakly (AUC **0.715**).
+- **In-domain unanswerable questions are WORSE than chance (AUC 0.337)** — "how many rak'ahs is in Fajr?" retrieves *more* verses than "what does the Quran say about patience?", because it is dense with prayer vocabulary. Adversarial prompts score 0.265 for the same reason.
+- This is the measured justification for **G1 (scope classification on the question)**. No threshold on a retrieval score can ever refuse a fiqh question. Recorded in CHALLENGES.
+
+> **SUPERSEDED 2026-10-31 by step 5c.** The 0.337 was an artifact: the Arabic field was
+> answering Persian questions with verses that merely mention «قرآن», which inflated
+> in-domain retrieval evidence. After the frame-only fix the honest value is **0.551 —
+> chance**, not inversion. The conclusion (no retrieval threshold can refuse in-domain
+> fiqh questions) is unchanged and in fact cleaner. See the 5c entry below.
+
+**Also learned: lexical retrieval cannot bridge paraphrase.**
+- hit@50 is only 68%, and the misses are vocabulary mismatches, not ranking errors: the query says "charity", the translation says *"spend their wealth"* (2:261); the query says "alcohol", the translation says *"intoxicants"*.
+- Top-5 hits for "charity" (57:18, 2:263) and "arrogance" (23:67, 7:206) are **genuinely about those topics** — they are simply not the verses on my gold list. So hit@k here is a **lower bound**, and the gold lists are the weak part of the measurement, not the retriever.
+- Consequence for planning: the **concept/synonym layer is load-bearing, not decorative**. It was scheduled at M4; the evidence says a synonym-expanded query is needed before the slice can be called usable. Does not change M1–M3 ordering, but does raise M4's priority.
+
+**Not yet done**
+- No gates (G0–G3) exist — this harness computes features, it does not make decisions.
+- The item set is a pilot authored by me: not blind, not scholar-reviewed, and the gold lists are incomplete (see above). Step 6 still requires an independent reviewer.
+
+**Next action**
+- M0 step 6: expand the pilot toward a 100-item blind bilingual set with an independent scholar reviewer, and expand gold lists before quoting any recall number as a quality claim.
+
+---
+
+## 2026-10-31 — M0 step 5c: review pass, corrected measurements, regression tests
+
+A 25-finding review of the 5b code was run (7 retrieval, 11 eval-harness, 7 test-coverage).
+All were fixed before commit. The 5b numbers above are kept for the record; several are
+**SUPERSEDED** here because the retriever they measured had a frame-term defect.
+
+**Retrieval defect found by re-measuring (not on the review list)**
+- The `ar` field answered Persian questions with verses that only mention «قرآن».
+  «قرآن درباره ازدواج چه می‌گوید» has no Arabic content term, so the field matched the
+  frame term alone and returned 4:82, 2:185, 7:204, 15:1, 5:101, 6:19 — then outvoted the
+  Persian list in RRF. `searchField` now returns **nothing** when the query has content
+  words but the field matched only frame terms. A bare «القرآن» query still works.
+- Effect on the decisive measurement: in-domain-unanswerable AUC moved 0.337 → **0.551**
+  (chance), out-of-domain 0.715 → **0.846**. The old 0.337 was an artifact of the pollution,
+  not evidence of inversion. The G1 conclusion is unchanged: no retrieval threshold can
+  refuse an in-domain fiqh question.
+- Effect on hit@5: overall 27.3% (unchanged), but the composition is now honest.
+
+**Corrected pilot measurements (2026-10-31, NOT blind- or scholar-reviewed)**
+
+| metric | all | en | fa |
+|---|---:|---:|---:|
+| hit@5 | 27.3% | 30.3% | 24.2% |
+| hit@10 | 36.4% | 45.5% | 27.3% |
+| hit@20 | 50.0% | 54.5% | 45.5% |
+| hit@50 | 66.7% | 69.7% | 63.6% |
+| gold recall@5 | 13.2% | 12.6% | 13.7% |
+| MRR (50 candidates) | 0.199 | — | — |
+
+Split by answer type at k=5: **direct 36.0% / 16.9% recall** (n=50), **paraphrase 0.0% /
+0.0%** (n=16). Pooling the two hid the entire finding; the report no longer pools them.
+
+**Refusal signals, best feature `nHits` (coverage, capped at 50)**
+
+| refusal type | n | raw AUC | refusal recall at ~4.5% false refusal |
+|---|---:|---:|---:|
+| out-of-domain | 12 | 0.846 | 66.7% (8/12) |
+| in-domain unanswerable | 18 | 0.551 | 11.1% (2/18) |
+| adversarial | 4 | 0.470 | 0.0% (0/4) |
+
+**Eval harness corrections**
+- The sweep now selects on the **Clopper-Pearson upper bound**, not the point estimate.
+  Consequence: **no operating point is certified** at pilot size — 66 answerable items with
+  zero false refusals still gives a 5.4% upper bound, above the 5% budget. 72 per language
+  are needed. The point-estimate optimum is reported separately and labelled illustrative.
+- Zero-error power bound is now computed **per language and never pooled**: 17 EN + 17 FA,
+  zero-error upper bound 19.5% each; 183 items per language for a 2% bound, 72 for 5%.
+- `hit@k` is any-gold; `gold recall@k` is the fraction of all gold refs. Both reported.
+- Per-type refusal rows carry Clopper-Pearson intervals; failure rows distinguish
+  "no hits at all" from "not in top 50".
+- RRF-scale caveats stated in the report (`top`/`gap` are 1/(60+rank) sums; `nHits` capped).
+- The finding condition no longer subtracts raw AUCs (the 5b bug that read 0.052 as 0.378).
+
+**Retrieval corrections**
+- Persian phrase bonus now actually fires (`phrase: normalizeJoined(query)`); it was dead
+  because the fa query string concatenates two ZWNJ variants and appears in no document.
+- `arabicVariants` derives from `body`, not the full verse — the basmala was re-embedded in
+  all 112 surah-opening variant keys.
+- `derive()` adds only the ZWNJ-joined form; splitting «می‌توان» smuggled «توان»
+  ("power/ability") into the stopword set.
+- Frame terms are **down-weighted (0.2), not deleted**, and cannot carry a list on their own.
+
+**Tests**
+- New `pipeline/tests/search-quality.test.ts` (13 tests): `foldEnglish`, the
+  `ENGLISH_MARKERS` language guard (behavioural, with a stub retriever), stopword
+  derivation, `englishVariants`, and the frame-only regression.
+- `corpus.test.ts` now asserts the basmala is absent from all 112 opening variant keys.
+- Three tests that measured less than their names claimed were renamed or scoped.
+- **132 tests green.**
+
+**Next action**
+- Commit step 5c on `init`, then M0 step 6: blind bilingual set + independent scholar review.
+
+---
+
 ## Stage tracker
 
 | Stage | Scope | Status |
@@ -193,6 +330,13 @@ If a session dies mid-build, the next one resumes from this file alone.
 | 2026-10-31 | int8 scan, 768-d | 6.0 ms | borderline |
 | 2026-10-31 | int8 scan, 512-d | 4.0 ms | fits, still needs the binary prefilter |
 | 2026-10-31 | bge-m3 full trilingual index | ~804 neurons | ~748k tokens, 8% of one free day |
+| 2026-10-31 | BM25 index build, 3 fields × 6,236 verses | ~300 ms | in-memory, Node 24; shipped worker will read a KV artefact |
+| 2026-10-31 | pilot hit@5 / hit@10 / hit@50 | 27.3% / 39.4% / 68.2% | gold lists incomplete — lower bound, not a quality claim |
+| 2026-10-31 | retrieval-signal AUC, answerable vs should-refuse | 0.46–0.51 | **no usable signal**; in-domain-unanswerable 0.337 (worse than chance) |
+| 2026-10-31 | **CORRECTED** same measurement after the frame-only fix | best signal `nHits` 0.645; ood 0.846; in-domain **0.551 (chance)**; adversarial 0.470 | supersedes the 0.337 row — that value was frame-term pollution, not inversion |
+| 2026-10-31 | pilot hit@5 by answer type | direct 36.0% (18/50), paraphrase **0.0%** (0/16) | pooling the two hid the paraphrase failure |
+| 2026-10-31 | false-refusal budget certification at pilot size | **uncertifiable**: 0 false refusals over 66 answerable items gives UCB 5.4% > 5% budget | needs 72 answerable items per language |
+| 2026-10-31 | should-refuse power, per language | 17 EN / 17 FA; zero-error UCB 19.5% each | 183 per language for 2%, 72 for 5% |
 
 ---
 

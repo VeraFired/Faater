@@ -60,12 +60,15 @@ Retrieval: trilingual BM25 over FTS5 (`ar_norm` + `en` + `fa_norm`) ⊕ dense �
 ## Commands
 
 ```bash
-pnpm pipeline      # build corpus + index from data/source
-pnpm test          # pipeline unit tests (Node native test runner, no deps)
-pnpm eval          # golden-set scores; must pass before deploy
-pnpm dev           # local Worker + web
-pnpm deploy        # wrangler deploy
+pnpm pipeline      # build corpus + translations + lexicon from data/source (hashes verified first)
+pnpm test          # pipeline unit tests (Node native test runner, zero deps)
+pnpm eval          # pilot retrieval/refusal eval → eval/report.md + report.json
+pnpm dev           # not implemented yet — arrives with M1 (worker) / M2 (web)
+pnpm deploy        # not implemented yet — arrives with M1
 ```
+
+`pnpm eval` writes evidence, it does not gate: there are no gates to test yet. Its
+per-type AUC table is the justification for G1 — see `.claude/DECISIONS.md` ADR-017.
 
 ---
 

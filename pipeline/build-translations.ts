@@ -23,6 +23,7 @@ import { join, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DatabaseSync } from 'node:sqlite'
 
+import { foldEnglish } from './lib/stopwords.ts'
 import { parseTranslation, rejoin, selfNumber } from './lib/translation.ts'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -121,7 +122,11 @@ async function main(): Promise<void> {
       const text = row.translation ?? ''
       if (!text.trim()) fail(`${ed.key}: blank translation at ${ref}`)
 
-      const parsed = parseTranslation(text, row.footnotes ?? '')
+      const parsed = parseTranslation(
+        text,
+        row.footnotes ?? '',
+        ed.lang === 'en' ? foldEnglish : undefined,
+      )
       if (rejoin(parsed.segments) !== text) lossy++
       if (parsed.footnotes.length) withFootnotes++
       for (const n of parsed.unresolvedNotes) unresolved.push({ ref, n })

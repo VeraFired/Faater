@@ -35,8 +35,15 @@ export function finglishKey(input: string): string {
   return s.replace(/\s+/g, ' ').trim()
 }
 
-/** Arabic definite-article prefixes, including the assimilated forms. */
-const ARTICLE = /^(al|at|an|as|ash|ar|az|ad|ath|azh) /
+/**
+ * Arabic definite-article prefixes, including the assimilated forms.
+ *
+ * Longest first is not required — the regex backtracks — but every form that
+ * occurs in Tanzil's `tname` must be present. `adh` was missing, so
+ * «Adh-Dhaariyat» never produced the bare key "dhariyat" and a user typing
+ * "dhariyat" could not reach surah 51.
+ */
+const ARTICLE = /^(al|at|an|as|ash|adh|ar|az|ad|ath|azh) /
 
 /**
  * Derive lookup keys from a Tanzil transliteration, e.g. "Al-Faatiha".

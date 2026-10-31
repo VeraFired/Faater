@@ -124,11 +124,20 @@ async function main(): Promise<void> {
 
   const verses: Verse[] = []
   let skippedNonVerse = 0
+  // The copyright block is captured VERBATIM, not summarised. CC BY 3.0
+  // requires the notice to be reproduced in every derived file, and a
+  // hand-typed summary is how it drifts: the previous hard-coded string said
+  // "(C) 2008-2026 Tanzil.info" while the source says
+  // "Copyright (C) 2007-2026 Tanzil Project".
+  const noticeLines: string[] = []
 
   for (const line of lines) {
     const m = /^(\d{1,3})\|(\d{1,3})\|(.+)$/.exec(line.trimEnd())
     if (!m) {
-      if (line.trim()) skippedNonVerse++
+      if (line.trim()) {
+        skippedNonVerse++
+        noticeLines.push(line.trimEnd())
+      }
       continue
     }
     const surah = Number(m[1])
@@ -143,7 +152,10 @@ async function main(): Promise<void> {
       arabic,
       arabicNorm: normalize(arabic),
       bodyNorm: split.body.trim() ? normalize(split.body) : '',
-      arabicVariants: joinedVariants(arabic),
+      // Derived from `body`, not `arabic`. Using the full verse re-embeds the
+      // basmala in all 112 surah-opening search keys — the same defect the
+      // bodyNorm field exists to avoid, except in the Persian variant field.
+      arabicVariants: split.body.trim() ? joinedVariants(split.body) : [],
       basmala: split.basmala,
       body: split.body,
       basmalaIsWholeVerse: split.isWholeVerse,
@@ -157,6 +169,19 @@ async function main(): Promise<void> {
   if (skippedNonVerse !== 28) {
     // The Tanzil copyright block. If this moves, the file was tampered with.
     fail(`expected 28 non-verse lines (copyright block), got ${skippedNonVerse}`)
+  }
+
+  // The notice is a licence obligation, so its content is asserted, not assumed.
+  const notice = noticeLines.join('\n')
+  for (const required of [
+    'Copyright (C) 2007-2026 Tanzil Project',
+    'Creative Commons Attribution 3.0',
+    'tanzil.net',
+    'CHANGING IT IS NOT ALLOWED',
+  ]) {
+    if (!notice.includes(required)) {
+      fail(`Tanzil notice is missing ${JSON.stringify(required)} — refusing to build`)
+    }
   }
 
   const surahNumbers = new Set(verses.map((v) => v.surah))
@@ -269,8 +294,8 @@ async function main(): Promise<void> {
     source: {
       file: 'Resources/quran-simple.txt',
       sha256: actualHash,
-      license: 'CC BY 3.0 — Tanzil.net — verbatim only; notice must ship with every copy',
-      copyright: '(C) 2008-2026 Tanzil.info',
+      license: 'Creative Commons Attribution 3.0 — Tanzil Project — verbatim only',
+      notice,
     },
     counts: {
       verses: verses.length,

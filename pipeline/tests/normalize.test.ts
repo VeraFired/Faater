@@ -86,7 +86,12 @@ test('the basmala normalizes identically across its shadda spellings', () => {
   assert.equal(a, 'بسم الله الرحمن الرحيم')
 })
 
-test('Latin text lowercases and drops punctuation', () => {
+test('Latin text lowercases and drops punctuation (RAW fold only)', () => {
+  // This pins normalize()'s own contract, not the English search key. Raw
+  // normalize() turns the apostrophe into a SPACE, so this key can never meet a
+  // user typing "quran"; the English search path applies foldEnglish() first
+  // (see search-quality.test.ts). Keeping the raw behaviour visible here is
+  // deliberate — it is the defect that made English recall 3%.
   assert.equal(normalize('What does the Qur’an say about Patience?!'), 'what does the qur an say about patience')
 })
 

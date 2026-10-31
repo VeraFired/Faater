@@ -43,3 +43,30 @@ export async function loadCorpus(): Promise<Corpus> {
   const raw = await readFile(join(ROOT, 'data', 'build', 'corpus.json'), 'utf8')
   return JSON.parse(raw) as Corpus
 }
+
+/**
+ * Load everything the retriever needs, from the built artifacts only.
+ *
+ * Shared by every test that exercises ranking: a second copy of this loader in
+ * one test file is how the two drift and start testing different corpora.
+ */
+export async function loadRetrieverData(): Promise<import('../lib/retrieve.ts').RetrieverData> {
+  const [corpus, en, fa, lexicon] = await Promise.all([
+    readFile(join(ROOT, 'data', 'build', 'corpus.json'), 'utf8').then((s) => JSON.parse(s)),
+    readFile(join(ROOT, 'data', 'build', 'translations.en.json'), 'utf8').then((s) => JSON.parse(s)),
+    readFile(join(ROOT, 'data', 'build', 'translations.fa.json'), 'utf8').then((s) => JSON.parse(s)),
+    readFile(join(ROOT, 'data', 'build', 'lexicon.json'), 'utf8').then((s) => JSON.parse(s)),
+  ])
+  return {
+    verses: corpus.verses,
+    basmala: corpus.basmalaDocument,
+    surahs: corpus.surahs,
+    en: en.verses,
+    fa: fa.verses,
+    lexicon: {
+      concepts: lexicon.concepts,
+      names: lexicon.names,
+      surahAliases: lexicon.surahAliases,
+    },
+  }
+}

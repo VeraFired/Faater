@@ -98,7 +98,11 @@ test('NEGATIVE: near-misses do not match — no substring fuzz', () => {
   assert.ok(resolveFinglish('sabr', ALL).length > 0)
 })
 
-test('NEGATIVE: English sentences do not spray matches', () => {
+test('NEGATIVE: English sentences do not spray matches (lexicon alone)', () => {
+  // SCOPE: this measures resolveFinglish() in isolation. The guard that stops
+  // an English SENTENCE reaching the expander at all lives in Retriever
+  // (ENGLISH_MARKERS) and is tested behaviourally in search-quality.test.ts —
+  // a lexicon test cannot see it.
   const hits = resolveFinglish('what is the meaning of life', ALL)
   // "life" is a curated concept, so exactly one match is acceptable here —
   // the scope gate, not the lexicon, decides whether the query is Quranic.
