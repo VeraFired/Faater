@@ -2,7 +2,9 @@
 
 A free, public, **Qur'an-grounded** Q&A system, in **English and Persian**. Answers only from the Qur'an. Refuses questions that are off-topic or unsupported by retrieved text. Target operating cost: **$0**.
 
-Read `.claude/PROGRESS.md` first — it is the single source of truth for where the build stands.
+Read `.claude/HANDOFF.md` first — it is the current state, plan and operating
+notes. `.claude/PROGRESS.md` is the append-only history; `.claude/BUGS.md` is
+the owner-reported defect log; `.claude/DECISIONS.md` holds the ADRs.
 
 ---
 
