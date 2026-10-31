@@ -22,6 +22,8 @@ const STRINGS = {
     footer: 'Free to use. No accounts, no ads, no tracking.',
     footerLicense: 'Quran text: Tanzil.net (CC BY 3.0). Translations: QuranEnc.com.',
     error: 'Could not reach the service. Please try again.',
+    turnstile: 'Please complete the verification below, then ask again.',
+    turnstileUnavailable: 'Verification is temporarily unavailable. Please try again shortly.',
     verses: (n) => `${n} ${n === 1 ? 'verse' : 'verses'}`,
     translation: 'Translation',
     footnotes: 'Footnotes',
@@ -44,6 +46,8 @@ const STRINGS = {
     footer: 'استفاده رایگان. بدون حساب، بدون تبلیغ، بدون ردگیری.',
     footerLicense: 'متن قرآن: Tanzil.net (CC BY 3.0). ترجمه‌ها: QuranEnc.com.',
     error: 'ارتباط با سامانه برقرار نشد. دوباره تلاش کنید.',
+    turnstile: 'لطفاً تأیید امنیتی زیر را کامل کنید و دوباره بپرسید.',
+    turnstileUnavailable: 'تأیید امنیتی موقتاً در دسترس نیست. کمی بعد دوباره تلاش کنید.',
     verses: (n) => `${n.toLocaleString('fa-IR')} آیه`,
     translation: 'ترجمه',
     footnotes: 'پانوشت‌ها',
@@ -98,6 +102,36 @@ function applyLang() {
   }
 }
 
+function translationText(text, ref, lang, footnotes) {
+  if (!footnotes?.length) return document.createTextNode(text)
+  const known = new Set(footnotes.map((fn) => fn.n))
+  const fragment = document.createDocumentFragment()
+  const marker = /\[(\d+)\]/g
+  let last = 0
+  let match
+  while ((match = marker.exec(text))) {
+    if (match.index > last) fragment.append(text.slice(last, match.index))
+    const n = Number(match[1])
+    if (known.has(n)) {
+      // Keep the visible characters exactly as published; only wrap the
+      // marker in a link to the matching footnote.
+      fragment.append(
+        el('a', {
+          class: 'fn-ref',
+          href: `#fn-${ref}-${lang}-${n}`,
+          id: `fnref-${ref}-${lang}-${n}`,
+          text: match[0],
+        }),
+      )
+    } else {
+      fragment.append(match[0])
+    }
+    last = marker.lastIndex
+  }
+  if (last < text.length) fragment.append(text.slice(last))
+  return fragment
+}
+
 function verseCard(verse) {
   const surahName = verse.surah_name[lang] ?? verse.surah_name.en
   const head = el('div', { class: 'verse-head' }, [
@@ -120,20 +154,31 @@ function verseCard(verse) {
   for (const tr of verse.translations) {
     const label = el('span', {
       class: 'translation-label',
-      text: `${t('translation')} · ${tr.title}`,
+      text: tr.version
+        ? `${t('translation')} · ${tr.title} · v${tr.version}`
+        : `${t('translation')} · ${tr.title}`,
+      title: tr.publisher ?? '',
     })
     const text = el('p', {
       class: 'translation-text',
       lang: tr.language,
       dir: tr.language === 'en' ? 'ltr' : 'rtl',
-      text: tr.text,
     })
+    text.append(translationText(tr.text, verse.ref, tr.language, tr.footnotes))
     const block = el('div', { class: 'translation' }, [label, text])
     if (tr.footnotes?.length) {
+      // Footnote numbers are the publisher's, not list positions: use `value`
+      // so [98] links to the item displayed as 98, not to the first <li>.
       const list = el(
         'ol',
         {},
-        tr.footnotes.map((fn) => el('li', { text: fn.text })),
+        tr.footnotes.map((fn) =>
+          el('li', {
+            id: `fn-${verse.ref}-${tr.language}-${fn.n}`,
+            value: String(fn.n),
+            text: fn.text,
+          }),
+        ),
       )
       block.append(el('details', { class: 'footnotes' }, [el('summary', { text: t('footnotes') }), list]))
     }
@@ -177,18 +222,35 @@ function showMessage(kind, message) {
 
 async function submit(query) {
   clearResults()
+  const button = $('#submit')
+  // A Turnstile token is single-use and the server requires one when its
+  // secret is configured. Fail clearly here rather than pretending the
+  // question was asked and showing a network error.
+  if (turnstileWidget && !turnstileToken) {
+    showMessage('clarification', t('turnstile'))
+    return
+  }
   const results = $('#results')
   results.append(el('div', { class: 'skeleton' }), el('div', { class: 'skeleton' }))
-  const button = $('#submit')
   button.disabled = true
 
   try {
     const res = await fetch('/api/ask', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ q: query, lang }),
+      body: JSON.stringify({ q: query, lang, token: turnstileToken || undefined }),
     })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    if (!res.ok) {
+      let code
+      try {
+        code = (await res.json())?.error
+      } catch {
+        // non-JSON error body
+      }
+      const error = new Error(`HTTP ${res.status}`)
+      error.code = code
+      throw error
+    }
     const data = await res.json()
 
     results.replaceChildren()
@@ -199,11 +261,25 @@ async function submit(query) {
     if (data.verses?.length) {
       for (const verse of data.verses) results.append(verseCard(verse))
     }
-  } catch {
+  } catch (error) {
     results.replaceChildren()
-    showMessage('refused', t('error'))
+    const message =
+      error?.code === 'turnstile_failed'
+        ? t('turnstile')
+        : error?.code === 'turnstile_unavailable'
+          ? t('turnstileUnavailable')
+          : t('error')
+    showMessage('refused', message)
   } finally {
     button.disabled = false
+    if (turnstileWidget) {
+      turnstileToken = ''
+      try {
+        window.turnstile?.reset(turnstileWidget)
+      } catch {
+        // widget already gone
+      }
+    }
   }
 }
 
@@ -229,3 +305,43 @@ for (const btn of document.querySelectorAll('.lang-btn')) {
 }
 
 applyLang()
+
+// Turnstile is configured by the Worker. The site key is public; the secret
+// stays server-side. When no site key is configured the widget is absent and
+// the API (if its secret is also absent) accepts requests without a token.
+let turnstileWidget = null
+let turnstileToken = ''
+
+async function setupTurnstile() {
+  try {
+    const res = await fetch('/api/config')
+    if (!res.ok) return
+    const config = await res.json()
+    if (!config.turnstile_site_key) return
+    const script = document.createElement('script')
+    script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
+    script.async = true
+    await new Promise((resolve, reject) => {
+      script.onload = resolve
+      script.onerror = reject
+      document.head.append(script)
+    })
+    if (!window.turnstile) return
+    turnstileWidget = window.turnstile.render('#turnstile', {
+      sitekey: config.turnstile_site_key,
+      callback: (token) => {
+        turnstileToken = token
+      },
+      'expired-callback': () => {
+        turnstileToken = ''
+      },
+      'error-callback': () => {
+        turnstileToken = ''
+      },
+    })
+  } catch {
+    // Fail closed at the API, not by breaking the page.
+  }
+}
+
+setupTurnstile()

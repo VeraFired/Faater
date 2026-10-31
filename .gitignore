@@ -2,6 +2,14 @@
 # Regenerate rather than commit; a stale committed artifact is a silent bug.
 data/build/
 
+# Generated reviewer packet: contains full verse text in all three editions.
+# It is produced on demand by pipeline/tools/review-packet.ts and sent to the
+# reviewer; the public repo ships the protocol (docs/blind-set.md), not this.
+docs/blind-review.md
+
+# Scratch scripts from one-off experiments. Keep them on disk, out of history.
+.claude/tmp-*
+
 # Node
 node_modules/
 *.log

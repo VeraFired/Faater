@@ -18,8 +18,17 @@ Every response is one of:
 |---|---|
 | `answered` | verse cards returned |
 | `answered_with_boundary` | verse cards + a fixed notice (a ruling was requested) |
-| `refused` | fixed copy only, no cards (`reason`: `no_evidence`, `fiqh_no_verse`, `crisis`, `tafsir`, `meaning`) |
-| `clarification` | input problem (`too_short`, `too_long`) |
+| `refused` | fixed copy only, no cards (`reason`: `no_evidence`, `fiqh_no_verse`, `crisis`, `tafsir`, `meaning`, `out_of_range`) |
+| `clarification` | input problem (`too_short`, `too_long`, `control_chars`) |
+
+The safety escalation runs **before** the length cap: an over-long crisis
+message gets the referral, never "please shorten it". Control characters get
+their own reason instead of being mislabelled as a short question.
+
+An **explicit verse reference** (`2:255`, `سوره حمد`, "verse 255") bypasses G1
+and free-text retrieval: the user has already chosen the scope. An
+out-of-range reference is refused rather than falling through to unrelated
+verses.
 
 The answer path is:
 
@@ -53,11 +62,14 @@ D1/FTS5 path vs the in-memory retriever that produced the pilot numbers:
 
 | metric | in-memory | D1/FTS5 |
 |---|---:|---:|
-| hit@5 | 27.3% | 27.3% |
-| direct hit@5 | 34.0% | 32.0% |
-| paraphrase hit@5 | 6.3% | 12.5% |
-| MRR | 0.198 | 0.212 |
-| query time | — | ~10 ms/item local |
+| hit@5 | 28.8% | 30.3% |
+| direct hit@5 | 34.0% | 34.0% |
+| paraphrase hit@5 | 12.5% | 18.8% |
+| MRR | 0.215 | 0.229 |
+| query time | — | 12.3 ms/item local |
+
+Numbers regenerated 2026-10-31 after the ۀ (Persian heh with hamza) fold and the
+verbatim segment join; the earlier table (27.3/27.3, 6.3/12.5) predates that fix.
 
 The two paths differ in two deliberate ways: FTS5 excludes frame terms from a
 match when content terms exist (it cannot down-weight one term), and FTS5's
@@ -68,7 +80,10 @@ bm25 is its own statistic. Both are documented in `worker/src/retrieve.ts`.
 1. **G1 scope classifier.** The pilot measured that retrieval scores cannot
    separate in-domain unanswerable questions (AUC 0.551, chance). A question
    like "How many rak'ahs are in Fajr?" will retrieve prayer verses and be
-   answered. This is the largest open risk in the product.
+   answered. This is the largest open risk in the product. A zero-provider
+   lexical classifier was built and evaluated; it misses the 97% Quran-recall
+   target on an independent holdout (Persian 95.0%), so it is **not wired**.
+   The experiment, data and reproduction steps are in `docs/g1-scope.md`.
 2. **G2/G3.** No learned retrieval floor or answerability score. Refusal today
    happens only when retrieval returns nothing.
 3. **Rate limiting and abuse control.** Turnstile is wired (secret-gated), but
@@ -78,7 +93,8 @@ bm25 is its own statistic. Both are documented in `worker/src/retrieve.ts`.
    UNREVIEWED; a native reviewer and scholar must pass them.
 5. **Sensitive-verse metadata.** Not authored yet; sensitive verses can surface
    in ordinary cards.
-6. **Fonts and RTL UI.** No frontend yet — this is API only.
+6. **Frontend review.** `web/` is implemented (see below), but Persian UI copy
+   and RTL rendering have not been reviewed on a device.
 
 ## Files
 
@@ -88,7 +104,8 @@ bm25 is its own statistic. Both are documented in `worker/src/retrieve.ts`.
 - `worker/src/index.ts` — HTTP handler, CORS, Turnstile
 - `pipeline/build-d1.ts` — schema + seed generator
 - `pipeline/tools/eval-d1.ts` — parity check against the pilot
-- `worker/tests/ask.test.ts` — 10 contract tests against the real seed
+- `worker/tests/ask.test.ts` — 20 contract tests against the real seed
+- `worker/tests/http.test.ts` — CORS fail-closed and Turnstile config tests (no DB)
 
 ## Frontend
 

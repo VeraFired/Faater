@@ -22,14 +22,11 @@ import { arabicVariants, englishVariants } from './lib/stem.ts'
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const BUILD = join(ROOT, 'data', 'build')
 
-const NOTICE =
-  '-- Qur\'an text: Tanzil.net, CC BY 3.0 — https://tanzil.net\n' +
-  '-- Translations: QuranEnc.com — english_saheeh (Noor International Center),\n' +
-  '-- persian_ih (Rowwad Translation Center). See docs/licensing.md.\n'
-
 type Corpus = {
   version: string
   counts: { verses: number; surahs: number }
+  source: { file: string; sha256: string; license: string; notice: string }
+  basmalaDocument?: { ref: string; norm: string }
   surahs: Array<{
     index: number
     ayahs: number
@@ -71,14 +68,21 @@ const en = JSON.parse(await readFile(join(BUILD, 'translations.en.json'), 'utf8'
 const fa = JSON.parse(await readFile(join(BUILD, 'translations.fa.json'), 'utf8')) as Edition
 const lexicon = await readFile(join(BUILD, 'lexicon.json'), 'utf8')
 
-// The scope model is optional: the Worker falls back to retrieval-only refusal
-// when it is absent, which is honest but weaker.
-let scopeModel: string | null = null
-try {
-  scopeModel = await readFile(join(ROOT, 'data', 'scope-model.json'), 'utf8')
-} catch {
-  scopeModel = null
-}
+/**
+ * Tanzil's licence requires its copyright block to be reproduced in every
+ * derived file. The seed is a derived file containing the whole text, so the
+ * notice is copied verbatim (as SQL comments) into both artifacts.
+ */
+const NOTICE =
+  '-- Qur\'an text: Tanzil.net, CC BY 3.0 — https://tanzil.net\n' +
+  '-- Translations: QuranEnc.com — english_saheeh (Noor International Center),\n' +
+  '-- persian_ih (Rowwad Translation Center). See docs/licensing.md.\n' +
+  corpus.source.notice
+    .split('\n')
+    .map((line) => `-- ${line}`)
+    .join('\n') +
+  '\n'
+
 
 /** Index text: every token expanded exactly the way the in-memory index does. */
 const expandText = (text: string, expand: (t: string) => string[]): string =>
@@ -86,8 +90,14 @@ const expandText = (text: string, expand: (t: string) => string[]): string =>
     .flatMap((t) => expand(t))
     .join(' ')
 
+/**
+ * Rejoin QuranEnc's typed segments without inserting anything. `.join(' ')`
+ * inserted spaces that are not in the source, so the stored text was not
+ * verbatim (e.g. 2:255 gained a space after `(255)` and around footnote
+ * markers). Segment values already carry their own whitespace.
+ */
 const display = (e: Edition, ref: string): string =>
-  (e.verses[ref]?.segments ?? []).map((s) => s.v).join(' ').trim()
+  (e.verses[ref]?.segments ?? []).map((s) => s.v).join('')
 
 const q = (v: string | null | undefined): string =>
   v === null || v === undefined ? 'NULL' : `'${v.replace(/'/g, "''")}'`
@@ -116,8 +126,10 @@ CREATE TABLE verses (
   basmala TEXT,
   body_norm TEXT NOT NULL,
   en_text TEXT NOT NULL,
+  en_segments TEXT NOT NULL,
   en_search TEXT NOT NULL,
   fa_text TEXT NOT NULL,
+  fa_segments TEXT NOT NULL,
   fa_search TEXT NOT NULL,
   fa_search_joined TEXT NOT NULL,
   en_footnotes TEXT NOT NULL,
@@ -162,18 +174,25 @@ for (const v of corpus.verses) {
   const faText = display(fa, v.ref)
   const enSearch = enV?.searchText ?? ''
   const faSearch = faV ? `${faV.searchText} ${faV.searchTextJoined}` : ''
+  // 1:1 is the basmala as a whole verse; its body is empty because the split
+  // is presentational. Index the basmala document so an ordinary basmala query
+  // can still find it (the in-memory retriever has a pseudo-document for this).
+  const arSearch = [v.bodyNorm, v.ref === '1:1' ? (corpus.basmalaDocument?.norm ?? '') : '']
+    .filter(Boolean)
+    .join(' ')
   verseRows.push(
     `(${q(v.ref)}, ${v.surah}, ${v.ayah}, ${q(v.arabic)}, ${q(v.body)}, ${q(v.basmala)}, ` +
-      `${q(v.bodyNorm)}, ${q(enText)}, ${q(enSearch)}, ${q(faText)}, ${q(faV?.searchText ?? '')}, ` +
+      `${q(arSearch)}, ${q(enText)}, ${q(JSON.stringify(enV?.segments ?? []))}, ${q(enSearch)}, ` +
+      `${q(faText)}, ${q(JSON.stringify(faV?.segments ?? []))}, ${q(faV?.searchText ?? '')}, ` +
       `${q(faV?.searchTextJoined ?? '')}, ${q(JSON.stringify(enV?.footnotes ?? []))}, ` +
       `${q(JSON.stringify(faV?.footnotes ?? []))}, ` +
-      `${q(expandText(v.bodyNorm, arabicVariants))}, ` +
+      `${q(expandText(arSearch, arabicVariants))}, ` +
       `${q(expandText(enSearch, englishVariants))}, ` +
       `${q(expandText(faV?.searchText ?? '', arabicVariants))}, ` +
       `${q(expandText(faV?.searchTextJoined ?? '', arabicVariants))})`,
   )
   ftsRows.push(
-    `(${q(v.ref)}, ${q(expandText(v.bodyNorm, arabicVariants))}, ` +
+    `(${q(v.ref)}, ${q(expandText(arSearch, arabicVariants))}, ` +
       `${q(expandText(enSearch, englishVariants))}, ` +
       `${q(expandText(faV?.searchText ?? '', arabicVariants))}, ` +
       `${q(expandText(faV?.searchTextJoined ?? '', arabicVariants))})`,
@@ -186,17 +205,20 @@ const chunk = <T>(xs: T[], n: number): T[][] => {
   return out
 }
 
-const seedParts: string[] = [NOTICE, 'BEGIN TRANSACTION;']
-for (const batch of chunk(rows, 50)) seedParts.push(batch.join('\n'))
-for (const batch of chunk(verseRows, 25)) {
+const seedParts: string[] = [NOTICE]
+// No BEGIN/COMMIT: D1's remote import rejects explicit transaction statements.
+// Local SQLite loads each file atomically on its own.
+for (const batch of chunk(rows, 10)) seedParts.push(batch.join('\n'))
+for (const batch of chunk(verseRows, 5)) {
   seedParts.push(
-    'INSERT INTO verses (ref, surah, ayah, arabic, body, basmala, body_norm, en_text, en_search, ' +
-      'fa_text, fa_search, fa_search_joined, en_footnotes, fa_footnotes, ar_idx, en_idx, fa_idx, faj_idx) VALUES\n' +
+    'INSERT INTO verses (ref, surah, ayah, arabic, body, basmala, body_norm, en_text, en_segments, ' +
+      'en_search, fa_text, fa_segments, fa_search, fa_search_joined, en_footnotes, fa_footnotes, ' +
+      'ar_idx, en_idx, fa_idx, faj_idx) VALUES\n' +
       batch.join(',\n') +
       ';',
   )
 }
-for (const batch of chunk(ftsRows, 25)) {
+for (const batch of chunk(ftsRows, 5)) {
   seedParts.push(
     'INSERT INTO verses_fts (ref, ar, en, fa, faj) VALUES\n' + batch.join(',\n') + ';',
   )
@@ -204,12 +226,11 @@ for (const batch of chunk(ftsRows, 25)) {
 seedParts.push(
   `INSERT INTO meta VALUES ('corpus_version', ${q(corpus.version)});`,
   `INSERT INTO meta VALUES ('counts', ${q(JSON.stringify(corpus.counts))});`,
+  `INSERT INTO meta VALUES ('corpus_source', ${q(JSON.stringify(corpus.source))});`,
   `INSERT INTO meta VALUES ('lexicon', ${q(lexicon)});`,
   `INSERT INTO meta VALUES ('surahs', ${q(JSON.stringify(corpus.surahs))});`,
   `INSERT INTO meta VALUES ('en_edition', ${q(JSON.stringify(en.edition))});`,
   `INSERT INTO meta VALUES ('fa_edition', ${q(JSON.stringify(fa.edition))});`,
-  ...(scopeModel ? [`INSERT INTO meta VALUES ('scope_model', ${q(scopeModel)});`] : []),
-  'COMMIT;',
 )
 
 await mkdir(join(BUILD, 'd1'), { recursive: true })

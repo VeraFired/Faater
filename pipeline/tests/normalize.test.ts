@@ -46,6 +46,11 @@ test('teh marbuta folds to heh, alef maqsura to yeh', () => {
   assert.equal(normalize('هدى'), normalize('هدي'))
 })
 
+test('Persian heh with hamza above folds to heh in references', () => {
+  assert.equal(normalize('آیۀ ۲۵۵'), normalize('آیه ۲۵۵'))
+  assert.equal(normalize('سورۀ بقره'), normalize('سوره بقره'))
+})
+
 test('Persian yeh and kaf bridge to Arabic — the named silent-failure mode', () => {
   // Persian keyboards emit U+06CC / U+06A9; the Arabic index holds U+064A / U+0643.
   // Without the bridge, «کتاب» never matches the Arabic text.

@@ -6,6 +6,8 @@
  * native reviewer and a scholar pass it — it must not ship before then.
  */
 
+import { normalize } from '../../pipeline/lib/normalize.ts'
+
 export const VERSION = 'm1-0.1.0'
 
 export const LIMITS = {
@@ -25,6 +27,10 @@ export const COPY = {
       'I could not find a Quranic verse relevant to this question, so I cannot answer it. Try rephrasing with Quranic terms, or consult a qualified scholar.',
     too_short: 'Please ask a complete question.',
     too_long: 'That question is too long. Please shorten it.',
+    control_chars:
+      'That question contains characters I cannot process. Please rephrase it in plain text.',
+    out_of_range:
+      'That verse reference is outside the Quran’s range. Please check the surah and ayah numbers.',
     fiqh_no_verse:
       'This question asks for a religious ruling, and I could not find a Quranic verse that addresses it directly. A ruling requires a qualified mufti.',
     fiqh_boundary:
@@ -44,6 +50,10 @@ export const COPY = {
       'هیچ آیه‌ای از قرآن مرتبط با این پرسش پیدا نکردم؛ بنابراین نمی‌توانم به آن پاسخ دهم. لطفاً پرسش را با واژه‌های قرآنی بازنویسی کنید یا با عالمی واجد شرایط مشورت کنید.',
     too_short: 'لطفاً پرسش کامل‌تری بپرسید.',
     too_long: 'پرسش بیش از حد طولانی است. لطفاً آن را کوتاه‌تر کنید.',
+    control_chars:
+      'این پرسش نویسه‌هایی دارد که نمی‌توانم پردازش کنم. لطفاً آن را با متن ساده بازنویسی کنید.',
+    out_of_range:
+      'این نشانی آیه خارج از محدودهٔ قرآن است. لطفاً شمارهٔ سوره و آیه را بررسی کنید.',
     fiqh_no_verse:
       'این پرسش درخواست حکم شرعی است و آیه‌ای از قرآن نیافتم که مستقیماً به آن بپردازد. صدور حکم نیازمند مفتى واجد شرایط است.',
     fiqh_boundary:
@@ -65,7 +75,7 @@ export const COPY = {
  */
 export const FIQH_MARKERS = [
   'halal', 'haram', 'fatwa', 'ruling', 'is it allowed', 'is it permissible',
-  'is it forbidden', 'is it a sin', 'must i', 'wajib', 'makruh', 'sunnah of',
+  'is it forbidden', 'is it a sin', 'wajib', 'makruh',
   'حلال', 'حرام', 'فتوا', 'حکم', 'جایز', 'واجب', 'مکروه', 'گناه',
 ] as const
 
@@ -73,6 +83,12 @@ export const FIQH_MARKERS = [
 export const CRISIS_MARKERS = [
   'suicide', 'kill myself', 'end my life', 'self-harm', 'self harm', 'hurt myself',
   'domestic violence', 'being abused', 'he beats me', 'she beats me',
+  // Arabic script is accepted as Persian-language input by the Worker, so the
+  // safety branch must recognise Arabic too. Without these, an Arabic self-harm
+  // message received verse cards instead of the referral.
+  'انتحار', 'اقتل نفسي', 'أقتل نفسي', 'انتحر', 'أذي نفسي', 'اذي نفسي',
+  'أؤذي نفسي', 'اؤذي نفسي', 'إيذاء النفس', 'ايذاء النفس', 'عنف أسري',
+  'عنف اسري', 'يضربني', 'تضربني',
   'خودکشی', 'به خودم آسیب', 'آسیب به خودم', 'مرا کتک', 'خشونت خانگی',
 ] as const
 
@@ -82,5 +98,8 @@ export const MEANING_MARKERS = ['meaning of', 'interpret', 'تفسیر', 'معن
 
 export const containsMarker = (text: string, markers: readonly string[]): boolean => {
   const lower = text.toLowerCase()
-  return markers.some((m) => lower.includes(m))
+  // Arabic-script markers arrive with optional diacritics and hamza variants.
+  // normalize() folds them, so «أقتل نفسي» and «اقتل نفسي» share one key.
+  const normalized = normalize(text)
+  return markers.some((m) => lower.includes(m) || normalized.includes(normalize(m)))
 }

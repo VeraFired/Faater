@@ -103,3 +103,74 @@ test('the basmala query resolves to 1:1, not to 113 surah openings', async () =>
     ['1:1'],
   )
 })
+test('an out-of-range reference is refused, never answered from unrelated verses', async () => {
+  for (const q of ['2:999', 'What does verse 2:999 say about mercy?', '114:7']) {
+    const res = await ask(db, { q }, 't11')
+    assert.equal(res.status, 'refused', q)
+    assert.equal(res.reason, 'out_of_range', q)
+    assert.equal(res.verses.length, 0, q)
+  }
+})
+
+test('a range longer than D1\'s parameter cap returns its first cards, not a 500', async () => {
+  const res = await ask(db, { q: '2:1-286' }, 't12')
+  assert.equal(res.status, 'answered')
+  assert.deepEqual(
+    res.verses.map((v) => v.ref),
+    ['2:1', '2:2', '2:3', '2:4', '2:5'],
+  )
+})
+
+test('a Persian alternate surah name resolves to the surah', async () => {
+  const res = await ask(db, { q: 'سوره حمد' }, 't13')
+  assert.equal(res.status, 'answered')
+  assert.equal(res.verses[0]?.ref, '1:1')
+})
+
+test('Arabic self-harm text gets the crisis referral, not verse cards', async () => {
+  const res = await ask(db, { q: 'أريد أن أقتل نفسي' }, 't14')
+  assert.equal(res.status, 'refused')
+  assert.equal(res.reason, 'crisis')
+  assert.deepEqual(res.verses, [])
+})
+
+test('an over-length crisis message still gets the referral', async () => {
+  const res = await ask(
+    db,
+    { q: 'I want to kill myself. ' + 'I feel hopeless and alone. '.repeat(30) },
+    't15',
+  )
+  assert.equal(res.status, 'refused')
+  assert.equal(res.reason, 'crisis')
+})
+
+test('control characters get their own clarification reason', async () => {
+  const res = await ask(db, { q: 'what does the quran say about patience\u0001' }, 't16')
+  assert.equal(res.status, 'clarification')
+  assert.equal(res.reason, 'control_chars')
+})
+
+test('an English question quoting Arabic stays English', async () => {
+  const res = await ask(db, { q: 'What does "الصبر" mean in the Quran?' }, 't17')
+  assert.equal(res.lang, 'en')
+})
+
+test('a sentence-final period does not hide an explicit reference', async () => {
+  const res = await ask(db, { q: 'Show me 2:255.' }, 't18')
+  assert.deepEqual(
+    res.verses.map((v) => v.ref),
+    ['2:255'],
+  )
+})
+
+test('the basmala is indexed as a document, not only as an exact key', async () => {
+  const res = await ask(db, { q: 'الرحمن الرحيم' }, 't19')
+  assert.ok(res.verses.some((v) => v.ref === '1:1'), res.verses.map((v) => v.ref).join(', '))
+})
+
+test('translation cards carry the publisher version required by the licence', async () => {
+  const res = await ask(db, { q: '2:255' }, 't20')
+  const en = res.verses[0]?.translations.find((t) => t.language === 'en')
+  assert.equal(en?.version, '1.1.2')
+  assert.equal(en?.publisher, 'Issued by Noor International Center.')
+})

@@ -19,6 +19,8 @@ export interface Env {
   ALLOWED_ORIGIN?: string
   /** When set, a Turnstile token is required on /api/ask. */
   TURNSTILE_SECRET?: string
+  /** Public Turnstile site key, served to the frontend by /api/config. */
+  TURNSTILE_SITE_KEY?: string
 }
 
 const json = (body: unknown, status = 200, extra: Record<string, string> = {}): Response =>
@@ -35,26 +37,46 @@ const json = (body: unknown, status = 200, extra: Record<string, string> = {}): 
 const cors = (request: Request, env: Env): Record<string, string> => {
   const allowed = env.ALLOWED_ORIGIN ?? '*'
   const origin = request.headers.get('origin')
-  return {
-    'access-control-allow-origin': allowed === '*' ? '*' : origin === allowed ? allowed : 'null',
+  const headers: Record<string, string> = {
     'access-control-allow-methods': 'GET, POST, OPTIONS',
     'access-control-allow-headers': 'content-type, cf-turnstile-response',
     'access-control-max-age': '86400',
   }
+  // Omit the header entirely for a disallowed origin. "null" is a valid CORS
+  // value that opaque origins match, which would turn the allowlist off.
+  if (allowed === '*') headers['access-control-allow-origin'] = '*'
+  else {
+    headers['vary'] = 'Origin'
+    if (origin === allowed) headers['access-control-allow-origin'] = allowed
+  }
+  return headers
 }
 
-const verifyTurnstile = async (token: string, secret: string, ip: string | null): Promise<boolean> => {
-  const form = new FormData()
-  form.append('secret', secret)
-  form.append('response', token)
-  if (ip) form.append('remoteip', ip)
-  const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-    method: 'POST',
-    body: form,
-  })
-  if (!res.ok) return false
-  const body = (await res.json()) as { success?: boolean }
-  return body.success === true
+type TurnstileOutcome = 'ok' | 'invalid' | 'unavailable'
+
+const verifyTurnstile = async (
+  token: string,
+  secret: string,
+  ip: string | null,
+): Promise<TurnstileOutcome> => {
+  try {
+    const form = new FormData()
+    form.append('secret', secret)
+    form.append('response', token)
+    if (ip) form.append('remoteip', ip)
+    const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      body: form,
+      signal: AbortSignal.timeout(5000),
+    })
+    // A 5xx is an outage, not a bad token: reserving 403 for bad tokens keeps
+    // the client's retry behaviour honest.
+    if (!res.ok) return res.status >= 500 ? 'unavailable' : 'invalid'
+    const body = (await res.json()) as { success?: boolean }
+    return body.success === true ? 'ok' : 'invalid'
+  } catch {
+    return 'unavailable'
+  }
 }
 
 export default {
@@ -70,6 +92,15 @@ export default {
       return json({ ok: true, service: 'faater-ask' }, 200, headers)
     }
 
+    if (url.pathname === '/api/config') {
+      // The site key is public by design; the secret never leaves the Worker.
+      return json(
+        { turnstile_site_key: env.TURNSTILE_SITE_KEY ?? null },
+        200,
+        headers,
+      )
+    }
+
     if (url.pathname !== '/api/ask') {
       return json({ error: 'not_found' }, 404, headers)
     }
@@ -83,23 +114,32 @@ export default {
       const l = url.searchParams.get('lang')
       if (l === 'en' || l === 'fa') lang = l
     } else if (request.method === 'POST') {
-      let body: { q?: unknown; lang?: unknown; token?: unknown }
+      let body: unknown
       try {
-        body = (await request.json()) as typeof body
+        body = await request.json()
       } catch {
         return json({ error: 'invalid_json' }, 400, headers)
       }
-      q = typeof body.q === 'string' ? body.q : ''
-      if (body.lang === 'en' || body.lang === 'fa') lang = body.lang
-      if (typeof body.token === 'string') turnstile = body.token
+      if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+        return json({ error: 'invalid_json' }, 400, headers)
+      }
+      const fields = body as { q?: unknown; lang?: unknown; token?: unknown }
+      q = typeof fields.q === 'string' ? fields.q : ''
+      if (fields.lang === 'en' || fields.lang === 'fa') lang = fields.lang
+      if (typeof fields.token === 'string') turnstile = fields.token
     } else {
       return json({ error: 'method_not_allowed' }, 405, headers)
     }
 
     if (env.TURNSTILE_SECRET) {
       const ip = request.headers.get('cf-connecting-ip')
-      const ok = turnstile ? await verifyTurnstile(turnstile, env.TURNSTILE_SECRET, ip) : false
-      if (!ok) return json({ error: 'turnstile_failed' }, 403, headers)
+      const outcome = turnstile
+        ? await verifyTurnstile(turnstile, env.TURNSTILE_SECRET, ip)
+        : 'invalid'
+      if (outcome === 'unavailable') {
+        return json({ error: 'turnstile_unavailable' }, 503, headers)
+      }
+      if (outcome !== 'ok') return json({ error: 'turnstile_failed' }, 403, headers)
     }
 
     try {

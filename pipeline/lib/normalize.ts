@@ -30,6 +30,7 @@ const FOLD: Readonly<Record<string, string>> = {
   'ئ': 'ء', // ئ -> ء
   // letter-shape folds
   'ة': 'ه', // ة -> ه
+  'ۀ': 'ه', // ۀ -> ه (Persian heh with hamza above)
   'ى': 'ي', // ى -> ي
   // Persian -> Arabic canonical
   'ی': 'ي', // ی -> ي

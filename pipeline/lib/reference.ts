@@ -114,8 +114,10 @@ export function parseReference(raw: string, surahs: SurahRef[]): Reference | nul
 
   // ---- 1. Explicit numeric reference: 2:255, 2:255-257, 2:255–2:257 -------
   // Lookbehind/lookahead keep "12:3" out of "12:30" and stop "2.5" entirely.
+  // A sentence-final period is allowed ("Show me 2:255."), but a period
+  // followed by a digit is not ("2:255.5" must never become a reference).
   const numeric =
-    /(?<![\d.:])(\d{1,3})\s*:\s*(\d{1,3})(?:\s*[-–—]\s*(?:(\d{1,3})\s*:\s*)?(\d{1,3}))?(?![\d.:])/g
+    /(?<![\d.:])(\d{1,3})\s*:\s*(\d{1,3})(?:\s*[-–—]\s*(?:(\d{1,3})\s*:\s*)?(\d{1,3}))?(?![\d:]|\.\d)/g
   for (const m of structural.matchAll(numeric)) {
     const surah = Number(m[1])
     const start = Number(m[2])
@@ -220,7 +222,9 @@ function readNumber(token: string | undefined): number | null {
 function readAyahAfterMarker(tokens: string[]): { start: number; end: number | null } | null {
   for (let i = 0; i < tokens.length; i++) {
     if (!AYAH_MARKERS.has(tokens[i])) continue
-    const m = /^(\d{1,3})(?:[-–—](\d{1,3}))?$/.exec(tokens[i + 1] ?? '')
+    // Allow one sentence-final period ("verse 255.") but not a decimal
+    // ("255.5"): the digits after the period make the token invalid.
+    const m = /^(\d{1,3})(?:[-–—](\d{1,3}))?\.?$/.exec(tokens[i + 1] ?? '')
     if (!m) return null
     return { start: Number(m[1]), end: m[2] ? Number(m[2]) : null }
   }

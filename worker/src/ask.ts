@@ -20,8 +20,11 @@ import {
   containsMarker,
   type Lang,
 } from './config.ts'
-import { inScope, type ScopeModel } from '../../pipeline/lib/scope.ts'
+import { parseReference } from '../../pipeline/lib/reference.ts'
+import { inScope } from '../../pipeline/lib/scope.ts'
+import scopeModel from '../../data/scope-model.json' with { type: 'json' }
 import {
+  buildSurahRefs,
   searchD1,
   type D1Database,
   type Lexicon,
@@ -43,6 +46,9 @@ export interface VerseCard {
   translations: Array<{
     edition: string
     title: string
+    version?: string
+    publisher?: string
+    sourceUrl?: string
     language: Lang
     text: string
     footnotes: Array<{ n: number; text: string }>
@@ -66,9 +72,20 @@ export interface AskResponse {
 interface Meta {
   lexicon: Lexicon
   surahs: SurahMeta[]
-  enEdition: { key: string; title: string }
-  faEdition: { key: string; title: string }
-  scopeModel: ScopeModel | null
+  enEdition: {
+    key: string
+    title: string
+    version?: string
+    publisher?: string
+    sourceUrl?: string
+  }
+  faEdition: {
+    key: string
+    title: string
+    version?: string
+    publisher?: string
+    sourceUrl?: string
+  }
 }
 
 interface VerseRow {
@@ -91,7 +108,7 @@ async function loadMeta(db: D1Database): Promise<Meta> {
     metaCache = (async () => {
       const rows = await db
         .prepare(
-          "SELECT key, value FROM meta WHERE key IN ('lexicon','surahs','en_edition','fa_edition','scope_model')",
+          "SELECT key, value FROM meta WHERE key IN ('lexicon','surahs','en_edition','fa_edition')",
         )
         .bind()
         .all<{ key: string; value: string }>()
@@ -106,9 +123,6 @@ async function loadMeta(db: D1Database): Promise<Meta> {
         surahs: JSON.parse(get('surahs')) as SurahMeta[],
         enEdition: JSON.parse(get('en_edition')),
         faEdition: JSON.parse(get('fa_edition')),
-        scopeModel: map.has('scope_model')
-          ? (JSON.parse(get('scope_model')) as ScopeModel)
-          : null,
       }
     })().catch((err) => {
       metaCache = null
@@ -120,7 +134,12 @@ async function loadMeta(db: D1Database): Promise<Meta> {
 
 const detectLang = (query: string, declared?: Lang): Lang => {
   if (declared === 'en' || declared === 'fa') return declared
-  return /[؀-ۿ]/.test(query) ? 'fa' : 'en'
+  // A question is classified by its dominant script, not by the presence of
+  // one foreign character: an English question quoting «الصبر» is still
+  // English, while a Persian sentence with an English loanword is still Persian.
+  const latin = (query.match(/[A-Za-z]/g) ?? []).length
+  const arabicScript = (query.match(/[؀-ۿ]/g) ?? []).length
+  return latin > 0 && latin > arabicScript ? 'en' : 'fa'
 }
 
 const isControl = (text: string): boolean => /[\u0000-\u0008\u000E-\u001F\u007F]/.test(text)
@@ -171,6 +190,9 @@ async function buildCards(
         {
           edition: meta.enEdition.key,
           title: meta.enEdition.title,
+          version: meta.enEdition.version,
+          publisher: meta.enEdition.publisher,
+          sourceUrl: meta.enEdition.sourceUrl,
           language: 'en',
           text: row.en_text,
           footnotes: parseFootnotes(row.en_footnotes),
@@ -178,6 +200,9 @@ async function buildCards(
         {
           edition: meta.faEdition.key,
           title: meta.faEdition.title,
+          version: meta.faEdition.version,
+          publisher: meta.faEdition.publisher,
+          sourceUrl: meta.faEdition.sourceUrl,
           language: 'fa',
           text: row.fa_text,
           footnotes: parseFootnotes(row.fa_footnotes),
@@ -213,17 +238,22 @@ export async function ask(
     version: VERSION,
   }
 
-  // G0 — input guard
-  if (query.length < LIMITS.minChars || isControl(query)) {
+  // G0 — input guard. Control characters get their own reason: reporting a
+  // 39-character question as "too short" is simply false.
+  if (isControl(query)) {
+    return { ...base, status: 'clarification', reason: 'control_chars', message: copy.control_chars }
+  }
+  if (query.length < LIMITS.minChars) {
     return { ...base, status: 'clarification', reason: 'too_short', message: copy.too_short }
+  }
+
+  // Safety escalation runs before the length cap: a long crisis message must
+  // never be answered with "please shorten it". Fixed referral, no cards.
+  if (containsMarker(query, CRISIS_MARKERS)) {
+    return { ...base, status: 'refused', reason: 'crisis', message: copy.crisis }
   }
   if (query.length > LIMITS.maxChars) {
     return { ...base, status: 'clarification', reason: 'too_long', message: copy.too_long }
-  }
-
-  // Safety escalation: fixed referral, never verse cards.
-  if (containsMarker(query, CRISIS_MARKERS)) {
-    return { ...base, status: 'refused', reason: 'crisis', message: copy.crisis }
   }
 
   // Requests for commentary get their own fixed copy. Matching is deliberately
@@ -238,10 +268,23 @@ export async function ask(
   const meta = await loadMeta(db)
   const fiqh = containsMarker(query, FIQH_MARKERS)
 
+  // A user who names a verse has already chosen the scope. A lexical scope
+  // model sees only numerals and will refuse "2:255"; never let it override an
+  // explicit reference. Retrieval still resolves it and fiqh notices still run.
+  const surahRefs = buildSurahRefs(meta.lexicon, meta.surahs)
+  const parsedQuery = parseReference(query, surahRefs)
+  if (parsedQuery?.kind === 'invalid') {
+    // Never fall through to free-text retrieval after recognising a reference:
+    // "verse 2:999" would otherwise return unrelated mercy verses as if they
+    // answered the named verse.
+    return { ...base, status: 'refused', reason: 'out_of_range', message: copy.out_of_range }
+  }
+  const explicitReference = parsedQuery !== null
+
   // G1 — scope. The model is trained offline on lexical features and runs as a
   // dot product; no provider is involved. When it is absent, the path falls
   // back to retrieval-only refusal (weaker, never silently wrong).
-  if (meta.scopeModel && !inScope(meta.scopeModel, query)) {
+  if (!explicitReference && scopeModel.version !== 'placeholder' && !inScope(scopeModel, query)) {
     return fiqh
       ? { ...base, status: 'refused', reason: 'fiqh_no_verse', message: copy.fiqh_no_verse }
       : { ...base, status: 'refused', reason: 'off_topic', message: copy.off_topic }

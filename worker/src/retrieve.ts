@@ -72,6 +72,33 @@ export interface SurahMeta {
   nameEn: string
   nameTranslit: string
   nameFa: string
+  /** Alternate Persian name (e.g. «حمد» for Al-Fatihah), when one exists. */
+  nameFaAlt?: string | null
+}
+
+/**
+ * Every spelling a user might type for a surah, in one place.
+ *
+ * ask() needs this for out-of-range detection and searchD1 needs it for direct
+ * retrieval. Two copies previously drifted: the Worker's lists omitted
+ * `nameFaAlt`, so «سوره حمد» silently fell through to free-text search.
+ */
+export function buildSurahRefs(lexicon: Lexicon, surahMeta: SurahMeta[]): SurahRef[] {
+  return surahMeta.map((s) => {
+    const alias = lexicon.surahAliases.find((a) => a.id === `surah:${s.index}`)
+    return {
+      index: s.index,
+      ayahs: s.ayahs,
+      keys: [
+        ...(alias?.keys ?? []),
+        alias?.en ?? s.nameEn,
+        alias?.fa ?? s.nameFa,
+        ...(s.nameFaAlt ? [s.nameFaAlt] : []),
+        s.nameAr,
+        s.nameTranslit,
+      ],
+    }
+  })
 }
 
 export interface Hit {
@@ -174,13 +201,18 @@ async function searchField(
   const phraseWords = tokenize(phraseSource)
   const phrase = phraseWords.length > 1 ? phraseWords.join(' ') : ''
 
-  return rows.results.map((row) => {
-    const tokens = new Set(row.idx.split(/\s+/).filter(Boolean))
-    const matched = coverageTerms.filter((t) => tokens.has(t)).length
-    const coverage = matched / coverageTerms.length
-    const bonus = phrase && row.raw.includes(phrase) ? 2 : 1
-    return { ref: row.ref, score: -row.rank * coverage * bonus }
-  })
+  return rows.results
+    .map((row) => {
+      const tokens = new Set(row.idx.split(/\s+/).filter(Boolean))
+      const matched = coverageTerms.filter((t) => tokens.has(t)).length
+      const coverage = matched / coverageTerms.length
+      const bonus = phrase && row.raw.includes(phrase) ? 2 : 1
+      return { ref: row.ref, score: -row.rank * coverage * bonus }
+    })
+    // FTS5 returns raw bm25 order. Coverage and the phrase bonus are part of
+    // our score, so sort by that score before RRF consumes list positions —
+    // otherwise those adjustments have no effect on the ranking at all.
+    .sort((a, b) => b.score - a.score)
 }
 
 // ---------------------------------------------------------------------------
@@ -319,38 +351,25 @@ export async function searchD1(
   }
 
   // Direct reference: the user named the verse, so retrieval is bypassed.
-  const surahRefs: SurahRef[] = surahMeta.map((s) => {
-    const alias = lexicon.surahAliases.find((a) => a.id === `surah:${s.index}`)
-    return {
-      index: s.index,
-      ayahs: s.ayahs,
-      keys: [
-        ...(alias?.keys ?? []),
-        alias?.en ?? s.nameEn,
-        alias?.fa ?? s.nameFa,
-        s.nameAr,
-        s.nameTranslit,
-      ],
-    }
-  })
+  const surahRefs = buildSurahRefs(lexicon, surahMeta)
   const ref = parseReference(rawQuery, surahRefs)
-  if (ref && (ref.kind === 'single' || ref.kind === 'range')) {
-    const refs: string[] = []
-    if (ref.kind === 'single') refs.push(`${ref.surah}:${ref.ayah}`)
-    else for (let a = ref.start; a <= ref.end; a++) refs.push(`${ref.surah}:${a}`)
-    if (refs.length) {
-      const placeholders = refs.map(() => '?').join(',')
-      const rows = await db
-        .prepare(`SELECT ref FROM verses WHERE ref IN (${placeholders})`)
-        .bind(...refs)
-        .all<{ ref: string }>()
-      const present = new Set(rows.results.map((r) => r.ref))
-      return refs.filter((r) => present.has(r)).slice(0, limit).map((r) => ({
-        ref: r,
-        score: 1,
-        fields: ['reference'],
-      }))
-    }
+  if (ref?.kind === 'single') {
+    const rows = await db
+      .prepare('SELECT ref FROM verses WHERE ref = ?')
+      .bind(`${ref.surah}:${ref.ayah}`)
+      .all<{ ref: string }>()
+    return rows.results.map((r) => ({ ref: r.ref, score: 1, fields: ['reference'] }))
+  }
+  if (ref?.kind === 'range') {
+    // D1 caps a query at 100 bound parameters. Binding one placeholder per
+    // ayah broke full-surah ranges ("2:1-286"); a BETWEEN query has four.
+    const rows = await db
+      .prepare(
+        'SELECT ref FROM verses WHERE surah = ? AND ayah BETWEEN ? AND ? ORDER BY ayah LIMIT ?',
+      )
+      .bind(ref.surah, ref.start, ref.end, limit)
+      .all<{ ref: string }>()
+    return rows.results.map((r) => ({ ref: r.ref, score: 1, fields: ['reference'] }))
   }
   if (ref && ref.kind === 'surah') {
     const rows = await db

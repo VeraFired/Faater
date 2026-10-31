@@ -75,6 +75,21 @@ test('parses a range 2:255-257', () => {
   assert.deepEqual(parse('2:255-257'), { kind: 'range', surah: 2, start: 255, end: 257, matched: '2:255-257' })
 })
 
+test('a sentence-final period does not hide a reference', () => {
+  assert.deepEqual(parse('Show me 2:255.'), {
+    kind: 'single', surah: 2, ayah: 255, matched: '2:255',
+  })
+  assert.deepEqual(parse('2:255-257.'), {
+    kind: 'range', surah: 2, start: 255, end: 257, matched: '2:255-257',
+  })
+  assert.equal((parse('Surah Al-Baqarah verse 255.') as { ayah: number }).ayah, 255)
+})
+
+test('a decimal point is still not a reference', () => {
+  assert.equal(parse('2.5'), null)
+  assert.equal(parse('2:255.5'), null)
+})
+
 test('parses an en-dash range and a full second reference', () => {
   assert.equal(parse('2:255–257')?.kind, 'range')
   const full = parse('2:255–2:257')
@@ -129,6 +144,12 @@ test('«سوره بقره آیه ۲۵۵» resolves to 2:255', () => {
   const r = parse('سوره بقره آیه ۲۵۵')
   assert.equal(r?.kind, 'single')
   assert.equal((r as { surah: number }).surah, 2)
+  assert.equal((r as { ayah: number }).ayah, 255)
+})
+
+test('Persian heh-with-hamza spelling «آیۀ» also resolves', () => {
+  const r = parse('آیۀ ۲۵۵ سوره بقره')
+  assert.equal(r?.kind, 'single')
   assert.equal((r as { ayah: number }).ayah, 255)
 })
 
