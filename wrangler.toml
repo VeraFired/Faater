@@ -1,0 +1,25 @@
+# Faater — Cloudflare Worker (zero-AI answer path)
+#
+# Create the D1 database once, then put its id here and load the seed:
+#   npx wrangler d1 create faater
+#   npx wrangler d1 execute faater --remote --file=data/build/d1/schema.sql
+#   npx wrangler d1 execute faater --remote --file=data/build/d1/seed.sql
+#   npx wrangler deploy
+#
+# No Workers AI binding: the answer path has no model call. Adding one here
+# would put a free quota on the critical path, which the architecture forbids.
+
+name = "faater"
+main = "worker/src/index.ts"
+compatibility_date = "2026-10-31"
+
+[vars]
+ALLOWED_ORIGIN = "*"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "faater"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+
+# Turnstile: set the secret as a Worker secret, never in this file.
+#   npx wrangler secret put TURNSTILE_SECRET

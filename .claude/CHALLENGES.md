@@ -117,6 +117,8 @@ The top-5 for "charity" (57:18, 2:263) and "arrogance" (23:67, 7:206) are genuin
 
 **Update 2026-10-31 (step 5d).** The mechanism now exists: 83 concepts with corpus-verified synonyms, fused as separate BM25 lists at RRF weight 0.1. Measured on the same pilot: paraphrase hit@5 **0.0% → 6.3%** (one item), direct unchanged at 36.0%, MRR 0.224. Unweighted fusion was rejected because it bought 12.5% paraphrase by halving direct precision. This is a **proof of mechanism, not a fix**: 15/16 paraphrase items still miss. Dense retrieval (M3) remains the intended remedy.
 
+**Update 2026-10-31 (M1 slice 1).** A second frame-term defect surfaced while porting to D1: the word "quran" matched the *quran concept*, so a question whose topical word was absent from the translation expanded into verses that merely mention the Book. Concept matching now ignores frame-only triggers whenever the query has content words. Pilot effect: hit@5 28.8% → 27.3%, direct 36.0% → 34.0% — the removed hits were correct-looking garbage.
+
 ## 🟡 Concept synonyms are unreviewed — search-only, but still load-bearing
 The synonym file was drafted by agents and verified only for **corpus existence**, not for **sense**. `df.ts` proves a term occurs; it cannot prove «صدقه» is the right Arabic term for the concept "charity" in every verse it touches. Moving a wrong-sense verse into the candidate set is invisible until a human reads it.
 **Mitigations in place:** synonyms are never displayed; the file is labelled `_review: UNREVIEWED`; content rules already forbid interpreting.

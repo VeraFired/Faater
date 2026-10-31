@@ -3,7 +3,7 @@
 Append-only. Date every entry. Record failures as loudly as successes.
 If a session dies mid-build, the next one resumes from this file alone.
 
-**Current status:** `M0 step 5d complete` — concept synonym layer built and fused at a measured weight; 138 tests green. Step 6 (blind bilingual eval with scholar review) is the remaining M0 item.
+**Current status:** `M0 step 5d complete`; `M1 slice 1 complete` (D1 FTS5 seed + zero-AI Worker answer path, 148 tests green). Public launch is blocked on **G1** — retrieval scores cannot refuse in-domain unanswerable questions (pilot AUC 0.551, chance) — and on the M0 step 6 scholar review.
 
 ---
 
@@ -360,6 +360,63 @@ Split by answer type at k=5: **direct 36.0% / 16.9% recall** (n=50), **paraphras
 **Next action**
 - Commit step 5d on `init`. Then M0 step 6 — blind set + scholar review — which remains
   blocked on a human reviewer.
+
+---
+
+## 2026-10-31 — M1 slice 1: D1 seed + zero-AI Worker answer path
+
+**Built**
+- `pipeline/build-d1.ts` → `data/build/d1/schema.sql` + `seed.sql` (14.5 MB):
+  `surahs`, `verses` (verbatim Arabic, body/basmala split, both translations,
+  folded+expanded search text), `meta` (lexicon, surahs, editions), and
+  `verses_fts` (FTS5 over `ar`, `en`, `{fa faj}`, `unicode61`).
+- `worker/src/retrieve.ts` — D1/FTS5 port of the in-memory retriever: three
+  field queries, frame-term guard, coverage + phrase bonuses, concept lists at
+  RRF weight 0.1. FTS5 cannot down-weight a single term, so frame terms are
+  excluded when content terms exist; documented in the module.
+- `worker/src/ask.ts` — G0 input guard, crisis/tafsir/meaning branches, fiqh
+  boundary, verse-card assembly (Arabic + EN + FA, footnotes, links, context
+  refs), fixed copy. No model call anywhere.
+- `worker/src/index.ts` — GET/POST `/api/ask`, `/api/health`, CORS, optional
+  Turnstile verification. `wrangler.toml` has **no Workers AI binding**.
+- `pipeline/tools/eval-d1.ts` — parity harness: Node's built-in SQLite + FTS5
+  loads the same schema/seed and runs the pilot through the Worker path.
+- `worker/tests/ask.test.ts` — 10 contract tests against the real seed.
+- `docs/m1-worker.md` — deploy steps and the explicit "do not launch" list.
+
+**Measured parity (pilot, same items)**
+
+| metric | in-memory | D1/FTS5 |
+|---|---:|---:|
+| hit@5 | 27.3% | 27.3% |
+| direct hit@5 | 34.0% | 32.0% |
+| paraphrase hit@5 | 6.3% | 12.5% |
+| MRR | 0.198 | 0.212 |
+| local query time | — | ~10 ms/item |
+
+**Second frame-term defect found and fixed**
+- Concept matching treated the word "quran" as a topical concept. A question
+  like "What does the Quran say about modesty?" (a word absent from the English
+  translation) therefore expanded into verses that merely mention the Book —
+  28:2, 31:2, 24:1 — which won by default when literal retrieval was empty.
+- `matchConcepts` now skips any trigger made only of frame terms when the query
+  has content words, in both the in-memory retriever and the Worker port.
+- Effect on the pilot: hit@5 28.8% → **27.3%**, direct 36.0% → **34.0%**,
+  paraphrase unchanged at 6.3%. Acceptance still passes (direct -2.0 pt is the
+  rule's limit), and the removed hits were correct-looking garbage.
+
+**Tests**
+- **148 tests green** (138 pipeline + 10 worker). `npm test` now runs both.
+
+**What this does NOT include**
+- G1 scope classifier, G2/G3 — in-domain unanswerable questions still retrieve
+  verses (pilot AUC 0.551, chance). Public launch remains blocked.
+- Rate limiting and per-IP caps; Turnstile is wired but secret-gated.
+- Sensitive-verse metadata, Persian copy review, and any frontend.
+
+**Next action**
+- Commit M1 slice 1. Then either G1 training data/classifier or the blind-set
+  scholar review — both block launch.
 
 ---
 

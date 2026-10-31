@@ -230,6 +230,16 @@ export class Retriever {
     const contains = (haystack: Set<string>[], needle: string[]): boolean =>
       haystack.some((h) => containsAll(h, needle))
 
+    // "Quran" names the corpus, it is not a topic. Expanding the quran concept
+    // from a question like "what does the Quran say about modesty" floods the
+    // candidate set with verses that merely mention the Book, and when literal
+    // retrieval finds nothing those verses win by default. A trigger made only
+    // of frame terms is therefore skipped whenever the question has content.
+    const allQueryTokens = [...enTokens, ...faTokenSets.flatMap((s) => [...s])]
+    const hasContent = allQueryTokens.some((t) => !FRAME_TERMS.has(t))
+    const isFrameTrigger = (needle: string[]) =>
+      hasContent && needle.length > 0 && needle.every((t) => FRAME_TERMS.has(t))
+
     const scored: Array<{ concept: ConceptEntry; specificity: number }> = []
     for (const concept of this.data.lexicon.concepts) {
       const syn = concept.synonyms
@@ -245,11 +255,15 @@ export class Retriever {
       let best = 0
       for (const t of enTriggers) {
         const needle = tokenize(normalize(foldEnglish(t)))
-        if (needle.length > best && containsAll(enTokens, needle)) best = needle.length
+        if (!isFrameTrigger(needle) && needle.length > best && containsAll(enTokens, needle)) {
+          best = needle.length
+        }
       }
       for (const t of [...faTriggers, ...arTriggers]) {
         const needle = tokenize(normalize(t))
-        if (needle.length > best && contains(faTokenSets, needle)) best = needle.length
+        if (!isFrameTrigger(needle) && needle.length > best && contains(faTokenSets, needle)) {
+          best = needle.length
+        }
       }
       if (best > 0) scored.push({ concept, specificity: best })
     }

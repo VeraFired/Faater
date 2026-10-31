@@ -5,10 +5,11 @@
   "type": "module",
   "description": "Free, public, Qur'an-grounded Q&A system (EN + FA)",
   "scripts": {
-    "pipeline": "node pipeline/build-corpus.ts && node pipeline/build-translations.ts && node pipeline/build-lexicon.ts",
-    "test": "node --test \"pipeline/tests/*.test.ts\"",
+    "pipeline": "node pipeline/build-corpus.ts && node pipeline/build-translations.ts && node pipeline/build-lexicon.ts && node pipeline/build-d1.ts",
+    "test": "node --test \"pipeline/tests/*.test.ts\" \"worker/tests/*.test.ts\"",
     "eval": "node pipeline/eval.ts",
-    "ablate": "node pipeline/tools/ablate.ts"
+    "ablate": "node pipeline/tools/ablate.ts",
+    "eval:d1": "node pipeline/tools/eval-d1.ts"
   },
   "engines": {
     "node": ">=24"
