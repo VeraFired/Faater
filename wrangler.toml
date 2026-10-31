@@ -19,7 +19,7 @@ ALLOWED_ORIGIN = "*"
 [[d1_databases]]
 binding = "DB"
 database_name = "faater"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "50163789-cd91-4f7b-bb9a-6eac3430a8a7"
 
 # Turnstile: set the secret as a Worker secret, never in this file.
 #   npx wrangler secret put TURNSTILE_SECRET
