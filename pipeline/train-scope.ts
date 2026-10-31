@@ -22,12 +22,15 @@ import { scopeFeatures, scopeScore, type ScopeModel } from './lib/scope.ts'
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const args = process.argv.slice(2)
 const dataPath = args.find((a) => !a.startsWith('--')) ?? join(ROOT, 'eval', 'scope-train.json')
+const outIdx = args.indexOf('--out')
+const outPath = outIdx >= 0 && args[outIdx + 1] ? resolve(args[outIdx + 1]) : join(ROOT, 'data', 'scope-model.json')
 const argOf = (name: string, fallback: number): number => {
   const i = args.indexOf(name)
   return i >= 0 ? Number(args[i + 1]) || fallback : fallback
 }
 const EPOCHS = argOf('--epochs', 300)
 const LR = argOf('--lr', 0.2)
+const excludeOod = args.includes('--exclude-ood')
 const L2 = 1e-5
 const MIN_COUNT = 2
 const MAX_FEATURES = 25_000
@@ -37,6 +40,11 @@ type Data = { _meta?: Record<string, unknown>; items: Item[] }
 
 const data = JSON.parse(await readFile(dataPath, 'utf8')) as Data
 const CLASSES = ['quran', 'fiqh', 'history', 'other_islamic', 'ood']
+// OOD questions are refused by empty retrieval anyway; including them teaches
+// the model to separate "everyday" from "Quranic" at the cost of the boundary
+// that matters — Quran vs later Islamic material. The product gate trains
+// without them and uses retrieval for off-topic questions.
+const trainingItems = excludeOod ? data.items.filter((i) => i.class !== 'ood') : data.items
 
 // ---------------------------------------------------------------------------
 // Seeded shuffle and group split
@@ -59,8 +67,12 @@ const shuffle = <T>(xs: T[]): T[] => {
   return out
 }
 
+// Group by author topic. Augmented templates share one topic per concept, so
+// their paraphrase variants stay in the same split. Original questions are
+// grouped by the generator's topic label; audit-dropped near-duplicates are
+// removed before training.
 const groups = new Map<string, Item[]>()
-for (const it of data.items) {
+for (const it of trainingItems) {
   const key = `${it.class}|${it.topic.toLowerCase().trim()}`
   const list = groups.get(key) ?? []
   list.push(it)
@@ -145,6 +157,7 @@ const dot = (p: Array<[number, number]>): number => {
 }
 
 const nPos = train.filter((e) => e.y === 1).length
+const nGroups = groups.size
 const nNeg = train.length - nPos
 const wPos = train.length / (2 * nPos)
 const wNeg = train.length / (2 * nNeg)
@@ -208,7 +221,10 @@ const evalAt = (examples: Example[], threshold: number) => {
   }
 }
 
-const candidates = Array.from({ length: 199 }, (_, i) => (i + 1) / 200)
+const candidates = [
+  ...Array.from({ length: 20 }, (_, i) => (i + 1) / 2000),
+  ...Array.from({ length: 180 }, (_, i) => (i + 11) / 200),
+]
 let best: { threshold: number; metrics: ReturnType<typeof evalAt> } | null = null
 for (const t of candidates) {
   const m = evalAt(cal, t)
@@ -285,6 +301,7 @@ const model: ScopeModel = {
   meta: {
     trainedAt: new Date().toISOString(),
     examples: train.length,
+    excludeOod,
     positives: nPos,
     features: vocab.length,
     calibration: {
@@ -308,11 +325,11 @@ const model: ScopeModel = {
   },
 }
 
-await writeFile(join(ROOT, 'data', 'scope-model.json'), JSON.stringify(model), 'utf8')
+await writeFile(outPath, JSON.stringify(model), 'utf8')
 
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`
 console.log('Scope model (G1 lexical)')
-console.log(`  items        ${data.items.length} (${nPos * 2} positive examples)`)
+console.log(`  items        ${data.items.length} in ${nGroups} split groups (${nPos} positive examples)`)
 console.log(`  features     ${vocab.length}`)
 console.log(`  threshold    ${threshold.toFixed(3)}`)
 console.log(`  calibration  Quran recall ${pct(calMetrics.quranRecall)} (n=${calMetrics.quranN}), ` +
@@ -324,4 +341,4 @@ console.log(`  pilot        Quran recall ${pct(pilotMetrics.quranRecall)} (n=${p
   `refusal recall ${pct(pilotMetrics.refusalRecall)} (n=${pilotMetrics.refusalN})`)
 console.log(`  pilot OOD ${pct(pilotMetrics.byCategory.ood)}, in-domain ${pct(pilotMetrics.byCategory.unanswerable_indomain)}, ` +
   `adversarial ${pct(pilotMetrics.byCategory.adversarial)}`)
-console.log('  wrote data/scope-model.json')
+console.log(`  wrote ${outPath}`)

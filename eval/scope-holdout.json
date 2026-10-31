@@ -1,0 +1,466 @@
+{
+  "_meta": {
+    "name": "G1 fresh holdout (workflow wf_30faa176-4ee)",
+    "status": "UNAUDITED — held out from training",
+    "created": "2026-10-31",
+    "counts": {
+      "quran": 40,
+      "fiqh": 10,
+      "history": 10,
+      "other_islamic": 10,
+      "ood": 20
+    }
+  },
+  "items": [
+    {
+      "class": "quran",
+      "q_en": "How does the Quran describe God's love and mercy for His creation?",
+      "q_fa": "قرآن مهر و رحمت خدا را نسبت به آفریده‌هایش چگونه توصیف می‌کند؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "Why does God test people with hardship?",
+      "q_fa": "چرا خدا مردم را با سختی آزمایش می‌کند؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "How can I stay patient when things don't go the way I want?",
+      "q_fa": "وقتی اوضاع آن‌طور که می‌خواهم پیش نمی‌رود، چطور صبر کنم؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "My parents are getting old; how should I care for them?",
+      "q_fa": "پدر و مادرم دارند پیر می‌شوند؛ چطور باید از آن‌ها مراقبت کنم؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "How does the Quran describe the Day of Judgment?",
+      "q_fa": "قرآن روز قیامت را چگونه توصیف می‌کند؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "How is Paradise described in the Quran?",
+      "q_fa": "بهشت در قرآن چگونه توصیف شده است؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "What does the Quran say Hell is like?",
+      "q_fa": "قرآن جهنم را چگونه توصیف می‌کند؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "Tell me the story of Prophet Yusuf the way the Quran tells it.",
+      "q_fa": "داستان حضرت یوسف را همان‌طور که قرآن روایت می‌کند برایم تعریف کن."
+    },
+    {
+      "class": "quran",
+      "q_en": "What can I learn from Prophet Ayyub's patience through illness?",
+      "q_fa": "از صبر حضرت ایوب در برابر بیماری چه می‌توانم یاد بگیرم؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "I've heard charity is called a loan to God — what does the Quran mean by that?",
+      "q_fa": "شنیده‌ام می‌گویند صدقه دادن مثل قرض دادن به خداست؛ قرآن با این تعبیر چه می‌خواهد بگوید؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "Is it better to help someone quietly or let people know about it?",
+      "q_fa": "بهتر است بی‌سروصدا به کسی کمک کنم یا اینکه مردم بدانند؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "What does the Quran say about thanking God for what we have?",
+      "q_fa": "قرآن درباره‌ی شکرگزاری از خدا برای داشته‌هایمان چه می‌گوید؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "How were the heavens and the earth created?",
+      "q_fa": "آسمان‌ها و زمین چگونه آفریده شدند؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "How does the Quran use rain as a sign of God's mercy?",
+      "q_fa": "قرآن چگونه باران را نشانه‌ای از رحمت خدا معرفی می‌کند؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "I've sinned a lot — is there still a way back to God?",
+      "q_fa": "گناه زیادی کرده‌ام؛ آیا هنوز راهی برای بازگشت به خدا هست؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "How does the Quran want us to treat orphans?",
+      "q_fa": "قرآن می‌خواهد با یتیمان چگونه رفتار کنیم؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "Why is remembering God so important in the Quran?",
+      "q_fa": "چرا یاد خدا در قرآن این‌قدر مهم است؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "What does the Quran tell us about angels?",
+      "q_fa": "قرآن درباره‌ی فرشتگان چه می‌گوید؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "How did God speak to Prophet Musa?",
+      "q_fa": "خدا چگونه با حضرت موسی سخن گفت؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "What is the Night of Decree and why does it matter?",
+      "q_fa": "شب قدر چیست و چرا اهمیت دارد؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "What signs of God can I see in the natural world?",
+      "q_fa": "چه نشانه‌هایی از خدا را می‌توانم در طبیعت ببینم؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "Why does the Quran warn against loving money too much?",
+      "q_fa": "چرا قرآن از دلبستگی زیاد به پول هشدار می‌دهد؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "What does the Quran teach about envy of what others have?",
+      "q_fa": "قرآن درباره‌ی حسادت به داشته‌های دیگران چه می‌آموزد؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "How did Prophet Ibrahim come to believe in one God?",
+      "q_fa": "حضرت ابراهیم چگونه به یگانگی خدا پی برد؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "What comfort does the Quran offer someone who has lost a loved one?",
+      "q_fa": "قرآن برای کسی که عزیزی را از دست داده چه تسلی‌ای دارد؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "How important is it in the Quran to keep your promises?",
+      "q_fa": "در قرآن وفای به قول و قرار چقدر مهم است؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "How does God guide a person who is searching for the truth?",
+      "q_fa": "خدا کسی را که دنبال حقیقت می‌گردد چگونه هدایت می‌کند؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "What does the Quran teach about sincerity when doing good deeds?",
+      "q_fa": "قرآن درباره‌ی اخلاص در انجام کارهای خوب چه می‌آموزد؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "Someone I know keeps gossiping about others — what does the Quran say about that?",
+      "q_fa": "یک آشنا مدام پشت سر دیگران حرف می‌زند؛ قرآن در این باره چه می‌گوید؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "What are the rights of neighbors in the Quran?",
+      "q_fa": "حق همسایه در قرآن چیست؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "What reward does the Quran promise to those who do good?",
+      "q_fa": "قرآن به نیکوکاران چه پاداشی وعده داده است؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "How can I learn to rely on God instead of worrying all the time?",
+      "q_fa": "چطور یاد بگیرم به جای اینکه مدام نگران باشم، به خدا توکل کنم؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "Why does the Quran encourage people to seek knowledge?",
+      "q_fa": "چرا قرآن مردم را به دانش‌آموزی تشویق می‌کند؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "What does the Quran say humans were created from?",
+      "q_fa": "قرآن می‌گوید انسان از چه چیزی آفریده شده است؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "How close is God to us, according to the Quran?",
+      "q_fa": "به گفته‌ی قرآن، خدا چقدر به ما نزدیک است؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "What does the Quran say about forgiving people who have hurt me?",
+      "q_fa": "قرآن درباره‌ی بخشیدن کسانی که به من بدی کرده‌اند چه می‌گوید؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "What does the Quran say its purpose is?",
+      "q_fa": "قرآن می‌گوید هدفش چیست؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "What does the Quran say about being fair to people, even those I don't like?",
+      "q_fa": "قرآن درباره‌ی انصاف با دیگران، حتی کسانی که دوستشان ندارم، چه می‌گوید؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "What does the Quran teach about being humble?",
+      "q_fa": "قرآن درباره‌ی تواضع و فروتنی چه می‌آموزد؟"
+    },
+    {
+      "class": "quran",
+      "q_en": "Does the Quran say we will be reunited with loved ones in Paradise?",
+      "q_fa": "آیا قرآن می‌گوید در بهشت دوباره به عزیزانمان می‌رسیم؟"
+    },
+    {
+      "class": "fiqh",
+      "q_en": "How many rak'ahs does each of the five daily prayers have?",
+      "q_fa": "هر یک از نمازهای پنجگانه چند رکعت دارد؟"
+    },
+    {
+      "class": "fiqh",
+      "q_en": "Could you explain the steps of wudu before prayer?",
+      "q_fa": "می‌توانید مراحل وضو گرفتن برای نماز را توضیح دهید؟"
+    },
+    {
+      "class": "fiqh",
+      "q_en": "If illness prevents someone from fasting, what expiation is due?",
+      "q_fa": "اگر بیماری مانع روزه گرفتن کسی شود، چه کفاره‌ای بر او واجب است؟"
+    },
+    {
+      "class": "fiqh",
+      "q_en": "What rate of zakat applies to personal savings?",
+      "q_fa": "زکات پس‌انداز شخصی به چه میزان است؟"
+    },
+    {
+      "class": "fiqh",
+      "q_en": "Is the gelatin found in packaged foods considered halal?",
+      "q_fa": "آیا ژلاتین موجود در غذاهای بسته‌بندی‌شده حلال است؟"
+    },
+    {
+      "class": "fiqh",
+      "q_en": "What makes a marriage contract valid in Islamic law?",
+      "q_fa": "عقد ازدواج در شریعت اسلام با چه شرایطی صحیح است؟"
+    },
+    {
+      "class": "fiqh",
+      "q_en": "How is a divorce supposed to be carried out in Islamic law?",
+      "q_fa": "طلاق در شریعت اسلام چگونه باید انجام شود؟"
+    },
+    {
+      "class": "fiqh",
+      "q_en": "How is an estate divided among the heirs?",
+      "q_fa": "ارث میان وارثان چگونه تقسیم می‌شود؟"
+    },
+    {
+      "class": "fiqh",
+      "q_en": "How should the prayer be shortened during travel?",
+      "q_fa": "نماز در سفر چگونه باید شکسته خوانده شود؟"
+    },
+    {
+      "class": "fiqh",
+      "q_en": "Is the start of Ramadan determined by sighting the moon or by astronomical calculation?",
+      "q_fa": "آغاز ماه رمضان با رؤیت هلال تعیین می‌شود یا با محاسبات نجومی؟"
+    },
+    {
+      "class": "history",
+      "q_en": "Who was the first caliph after the death of Prophet Muhammad?",
+      "q_fa": "اولین خلیفه پس از رحلت پیامبر محمد چه کسی بود؟"
+    },
+    {
+      "class": "history",
+      "q_en": "In which year did Prophet Muhammad migrate from Mecca to Medina?",
+      "q_fa": "پیامبر محمد در چه سالی از مکه به مدینه هجرت کرد؟"
+    },
+    {
+      "class": "history",
+      "q_en": "Who was the first muezzin in Islam?",
+      "q_fa": "نخستین مؤذن در اسلام چه کسی بود؟"
+    },
+    {
+      "class": "history",
+      "q_en": "Who founded the Umayyad dynasty, and where was its capital?",
+      "q_fa": "سلسله اموی را چه کسی بنیان گذاشت و پایتخت آن کجا بود؟"
+    },
+    {
+      "class": "history",
+      "q_en": "Which caliph ordered the founding of the city of Baghdad?",
+      "q_fa": "شهر بغداد به دستور کدام خلیفه تأسیس شد؟"
+    },
+    {
+      "class": "history",
+      "q_en": "What is the significance of the Dome of the Rock in Jerusalem?",
+      "q_fa": "اهمیت گنبد صخره در اورشلیم چیست؟"
+    },
+    {
+      "class": "history",
+      "q_en": "Who was Imam al-Ghazali, and what is he best known for?",
+      "q_fa": "امام غزالی که بود و بیشتر در چه زمینه‌ای شهرت دارد؟"
+    },
+    {
+      "class": "history",
+      "q_en": "In which city is the tomb of Imam Reza located?",
+      "q_fa": "آرامگاه امام رضا در کدام شهر قرار دارد؟"
+    },
+    {
+      "class": "history",
+      "q_en": "Who was Ibn Sina, and in which fields did he make contributions?",
+      "q_fa": "ابن سینا که بود و در چه زمینه‌هایی فعالیت می‌کرد؟"
+    },
+    {
+      "class": "history",
+      "q_en": "When was the Ottoman Sultanate abolished, and who was its last sultan?",
+      "q_fa": "سلطنت عثمانی در چه سالی لغو شد و آخرین سلطان آن چه کسی بود؟"
+    },
+    {
+      "class": "other_islamic",
+      "q_en": "Which hadith collections do Sunni scholars regard as the most reliable, and why?",
+      "q_fa": "عالمان اهلسنت کدام مجموعههای حدیثی را معتبرترین میدانند و چرا؟"
+    },
+    {
+      "class": "other_islamic",
+      "q_en": "I'm new to tafsir — which classical commentary would you recommend starting with?",
+      "q_fa": "من تازه با تفسیر آشنا شدهام؛ کدام تفسیر کلاسیک را برای شروع پیشنهاد میکنید؟"
+    },
+    {
+      "class": "other_islamic",
+      "q_en": "How do the four Sunni schools of law differ in their rules for ritual ablution (wudu)?",
+      "q_fa": "مذاهب چهارگانه فقهی اهلسنت در احکام وضو چه تفاوتهایی دارند؟"
+    },
+    {
+      "class": "other_islamic",
+      "q_en": "In recitation, what rule applies when a noon sakinah is followed by one of the letters of idgham?",
+      "q_fa": "در قرائت، اگر بعد از نون ساکن یکی از حروف ادغام بیاید چه حکمی دارد؟"
+    },
+    {
+      "class": "other_islamic",
+      "q_en": "How did the seven canonical recitations (qira'at) become standardized?",
+      "q_fa": "قرائتهای هفتگانه چگونه استاندارد شدند؟"
+    },
+    {
+      "class": "other_islamic",
+      "q_en": "Can you explain the grammatical analysis (i'rab) of the basmalah?",
+      "q_fa": "میتوانید اعراب (تحلیل نحوی) بسمله را توضیح دهید؟"
+    },
+    {
+      "class": "other_islamic",
+      "q_en": "Where are the oldest surviving manuscript copies of the Quran kept today?",
+      "q_fa": "قدیمیترین نسخههای خطی باقیمانده از قرآن امروز کجا نگهداری میشوند؟"
+    },
+    {
+      "class": "other_islamic",
+      "q_en": "Why is the order of surahs in the mushaf different from the order of revelation?",
+      "q_fa": "چرا ترتیب سورهها در مصحف با ترتیب نزول یکسان نیست؟"
+    },
+    {
+      "class": "other_islamic",
+      "q_en": "Where do Ash'ari and Maturidi theologians part ways on the question of divine attributes?",
+      "q_fa": "متکلمان اشعری و ماتریدی در مسئله صفات الهی کجا با هم اختلاف دارند؟"
+    },
+    {
+      "class": "other_islamic",
+      "q_en": "Do all scholars accept the doctrine of abrogation (naskh) in the Quran, and where do their views diverge?",
+      "q_fa": "آیا همه عالمان نظریه نسخ در قرآن را میپذیرند و اختلاف نظرشان در چیست؟"
+    },
+    {
+      "class": "ood",
+      "q_en": "How do I reverse a linked list in Python?",
+      "q_fa": "چطور یک لیست پیوندی را در پایتون برعکس کنم؟"
+    },
+    {
+      "class": "ood",
+      "q_en": "Will it rain in Tehran tomorrow afternoon?",
+      "q_fa": "آیا فردا بعدازظهر در تهران باران می‌بارد؟"
+    },
+    {
+      "class": "ood",
+      "q_en": "What's the best way to caramelize onions without burning them?",
+      "q_fa": "بهترین راه برای کاراملی کردن پیاز بدون سوزاندن آن چیست؟"
+    },
+    {
+      "class": "ood",
+      "q_en": "Do I need a visa to visit Japan as a tourist?",
+      "q_fa": "برای سفر توریستی به ژاپن ویزا لازم دارم؟"
+    },
+    {
+      "class": "ood",
+      "q_en": "Which is the longest river in South America?",
+      "q_fa": "طولانی‌ترین رودخانه آمریکای جنوبی کدام است؟"
+    },
+    {
+      "class": "ood",
+      "q_en": "How many players from each team are on the court in volleyball?",
+      "q_fa": "در والیبال چند بازیکن از هر تیم در زمین هستند؟"
+    },
+    {
+      "class": "ood",
+      "q_en": "Why does the sky look blue during the day?",
+      "q_fa": "چرا آسمان در طول روز آبی دیده می‌شود؟"
+    },
+    {
+      "class": "ood",
+      "q_en": "Who built the Great Wall of China?",
+      "q_fa": "دیوار بزرگ چین را چه کسانی ساختند؟"
+    },
+    {
+      "class": "ood",
+      "q_en": "How do I change the engine oil in my car?",
+      "q_fa": "چطور روغن موتور ماشینم را عوض کنم؟"
+    },
+    {
+      "class": "ood",
+      "q_en": "What is the difference between a list and a tuple in Python?",
+      "q_fa": "تفاوت لیست و تاپل در پایتون چیست؟"
+    },
+    {
+      "class": "ood",
+      "q_en": "How can I remove hard water stains from bathroom tiles?",
+      "q_fa": "چطور لکه‌های آب سخت را از کاشی‌های حمام پاک کنم؟"
+    },
+    {
+      "class": "ood",
+      "q_en": "What's the cheapest way to travel from London to Paris?",
+      "q_fa": "ارزان‌ترین راه سفر از لندن به پاریس چیست؟"
+    },
+    {
+      "class": "ood",
+      "q_en": "How long does sunlight take to reach the Earth?",
+      "q_fa": "نور خورشید چقدر طول می‌کشد تا به زمین برسد؟"
+    },
+    {
+      "class": "ood",
+      "q_en": "How do I make a fluffy omelette?",
+      "q_fa": "چطور یک املت پفکی درست کنم؟"
+    },
+    {
+      "class": "ood",
+      "q_en": "What is the capital city of Australia?",
+      "q_fa": "پایتخت استرالیا کدام شهر است؟"
+    },
+    {
+      "class": "ood",
+      "q_en": "How do I resolve a merge conflict in Git?",
+      "q_fa": "چطور یک تعارض ادغام در گیت را حل کنم؟"
+    },
+    {
+      "class": "ood",
+      "q_en": "What causes a rainbow to appear after it rains?",
+      "q_fa": "چه چیزی باعث می‌شود بعد از باران رنگین‌کمان ظاهر شود؟"
+    },
+    {
+      "class": "ood",
+      "q_en": "How long is a standard football match in minutes?",
+      "q_fa": "یک مسابقه فوتبال استاندارد چند دقیقه است؟"
+    },
+    {
+      "class": "ood",
+      "q_en": "Why is my laptop battery draining so quickly?",
+      "q_fa": "چرا باتری لپ‌تاپم این‌قدر سریع خالی می‌شود؟"
+    },
+    {
+      "class": "ood",
+      "q_en": "When is the best time of year to visit Iceland?",
+      "q_fa": "بهترین موقع سال برای سفر به ایسلند چه زمانی است؟"
+    }
+  ]
+}
