@@ -567,6 +567,47 @@ Full record: `docs/g1-scope.md`.
 
 ---
 
+## 2026-10-31 — Staging deployment on Cloudflare
+
+**Provisioned**
+- D1 `faater` created (WEUR, id `50163789-…`); schema applied and the full seed
+  loaded remotely: **6,236 verses / 6,236 FTS rows / 114 surahs**, 34.3 MB.
+- Account workers.dev subdomain registered as **`verafired`**. `vera` was
+  globally taken; `verafired` is the first available variant. The dashboard
+  onboarding URL from the CLI returned 404, so registration was done through
+  the Cloudflare API with the wrangler OAuth token.
+- Worker `faater` deployed: **https://faater.verafired.workers.dev**.
+- Turnstile widget `faater-staging` (managed) for the staging host. Site key is
+  public in `[vars]`; the secret is a Worker secret. `ALLOWED_ORIGIN` is now
+  the staging origin, not `*`.
+
+**Verified on the deployed edge**
+- `/api/health` 200; `/api/config` returns only the site key; static page 200.
+- CORS: no allow-origin header for a foreign origin, exact echo for the
+  staging origin.
+- Without a token: 403 `turnstile_failed`. With Cloudflare's always-pass test
+  secret (temporarily set, then restored): "patience" returned verse cards
+  (`70:5` first), `2:255` returned exactly that verse, `2:999` returned
+  `refused/out_of_range`.
+- The Turnstile secret was rotated after the test to invalidate the value that
+  had appeared in CLI output.
+
+**Learned**
+- Headless Chromium cannot solve a managed Turnstile challenge; the UI showed
+  the fixed "complete the verification" copy, which is the expected path.
+- `wrangler dev --remote` requires a workers.dev subdomain before it will run,
+  even for a preview that publishes nothing.
+- The dashboard route printed by wrangler (`/workers/onboarding`) 404s; the
+  route in the API error (`?to=/:account/workers/workers-and-pages`) works, and
+  the API itself is a reliable fallback.
+
+**Not launched**
+- G1/G2, per-IP rate limits, native copy review and sensitive-verse metadata
+  are still open. The staging URL is public but must not be presented as a
+  launch.
+
+---
+
 ## Stage tracker
 
 | Stage | Scope | Status |
@@ -578,6 +619,9 @@ Full record: `docs/g1-scope.md`.
 | **M4** | Concept cards — 400–800 concepts, offline generation, human review | ⬜ |
 | **M5** | Optional runtime LLM — provider cascade, quota ledger, citation validator | ⬜ |
 | **M6** | Governance — methodology page, scholar board, correction SLA, monitoring | ⬜ |
+
+**Staging:** live at https://faater.verafired.workers.dev — a test deployment,
+not a public launch. See the deployment entry above.
 
 **Do not skip M0.** If the slice fails, the product promise is wrong — cheaper to learn in a week than in a month.
 

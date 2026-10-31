@@ -14,7 +14,11 @@ main = "worker/src/index.ts"
 compatibility_date = "2026-10-30"
 
 [vars]
-ALLOWED_ORIGIN = "*"
+# Staging origin. Restricting it turns the CORS allowlist back on; the Worker
+# omits the header for any other origin.
+ALLOWED_ORIGIN = "https://faater.verafired.workers.dev"
+# Public by design. The matching secret is set with `wrangler secret put`.
+TURNSTILE_SITE_KEY = "0x4AAAAAAFt59-0FUGr0N8Py"
 
 [[d1_databases]]
 binding = "DB"

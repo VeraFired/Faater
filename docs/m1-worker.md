@@ -1,6 +1,7 @@
 # M1 Worker — zero-AI answer API
 
-Status: **implemented and tested locally; NOT deployable to the public yet.**
+Status: **deployed to staging; NOT publicly launched.**
+Staging: https://faater.verafired.workers.dev (D1 in WEUR, Turnstile managed).
 The retrieval and card path is complete. The scope and answerability gates
 (G1/G2/G3) are not — see "What is missing" below.
 
@@ -55,6 +56,28 @@ npx wrangler deploy
 
 `data/build/` is gitignored by design: the seed is deterministic from the
 pinned source and must be regenerated, never committed stale.
+
+### Staging (already provisioned)
+
+- Worker: `faater`, URL `https://faater.verafired.workers.dev`.
+- Account workers.dev subdomain: `verafired` (account-wide, set via API).
+- D1: `faater`, region WEUR, id `50163789-cd91-4f7b-bb9a-6eac3430a8a7`.
+  Loaded schema + seed: 6,236 verses, 6,236 FTS rows, 114 surahs, 34.3 MB.
+- Turnstile: widget `faater-staging`, mode managed, host
+  `faater.verafired.workers.dev`. The **site key** is public (`[vars]`); the
+  **secret** is a Worker secret and is never in `wrangler.toml`.
+- `ALLOWED_ORIGIN` is restricted to the staging origin, so CORS fails closed.
+
+Verified on staging: `/api/health`, `/api/config` (site key only), the static
+page, CORS (no allow-origin for a foreign origin), and 403 `turnstile_failed`
+without a token. With a Turnstile token, the answer path returned real cards
+(`70:5` for "patience"), an exact `2:255`, and `refused/out_of_range` for
+`2:999`.
+
+**Never leave a test secret set.** Cloudflare's always-pass test secret is
+useful for one end-to-end check; set the real secret again immediately, as was
+done here. The secret was rotated after the check to invalidate the value that
+had appeared in CLI output.
 
 ## What is measured
 

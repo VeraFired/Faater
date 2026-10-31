@@ -28,3 +28,4 @@ Thumbs.db
 # Cloudflare
 .wrangler/
 .dev.vars
+.gstack/
