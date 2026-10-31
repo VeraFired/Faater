@@ -606,6 +606,38 @@ Full record: `docs/g1-scope.md`.
   are still open. The staging URL is public but must not be presented as a
   launch.
 
+## 2026-10-31 — v0.1.0 source preview release
+
+**Done**
+- Tagged the first release, `v0.1.0`, as a source preview and published it as a
+  GitHub **pre-release** (not latest, no attached assets). Fast-forwarded
+  `main` to the release commit so the default branch matches the tag.
+- Release docs: `README.md`, `CHANGELOG.md`, `docs/releases/v0.1.0.md`,
+  `docs/eval-methodology.md` (current AUC/ablation values; earlier values kept
+  as SUPERSEDED), `docs/m1-worker.md`, `docs/blind-set.md`, `HANDOFF.md`.
+- Added a black-nib (✒️) SVG favicon and a footer credit linking VeraFired to
+  GitHub and Amir Vafaei to vafaeiam.ir.
+- Regenerated `eval/report.md` / `eval/report.json` from the release code.
+
+**Verified**
+- `pnpm pipeline`; `npm test` **167/167**.
+- `validate-blind.ts` → `VALID`, freeze verified; the blind set was **not run**.
+- Pilot in-memory / D1: hit@5 28.8% / 30.3%, direct 34.0% / 34.0%,
+  paraphrase 12.5% / 18.8%, MRR 0.215 / 0.229.
+- `pnpm ablate`: paraphrase 6.3% → 12.5%, direct 36.0% → 34.0% (PASS).
+- `npx wrangler deploy --dry-run` clean.
+
+**Not fixed**
+- BUG-001 remains open (Persian `شراب و قمار` puts 2:219 at rank 7/8; English
+  alcohol+gambling rank 3). v0.1.1 is the targeted fix; v0.2.0 is the reviewed
+  subject layer.
+- G1 held (92.5% vs 97%); G2/G3 missing; no per-IP caps/WAF; copy and legal
+  review pending. Staging remains a preview, not a launch.
+
+**Next action**
+- v0.1.1: cross-field coverage (D) + language-aware Arabic weight (A), with
+  `eval/issues/bug-001.json`; do not tune on the blind set.
+
 ---
 
 ## Stage tracker
@@ -663,6 +695,7 @@ not a public launch. See the deployment entry above.
 | 2026-10-31 | pilot retrieval after ۀ fold + verbatim segments | hit@5 28.8%, direct 34.0%, paraphrase 12.5%, MRR 0.215 | regenerated `eval/report.md`; supersedes the 27.3% rows for current code |
 | 2026-10-31 | D1/FTS5 parity, same code | hit@5 30.3%, direct 34.0%, paraphrase 18.8%, MRR 0.229, 12.3 ms/item | `npm run eval:d1` |
 | 2026-10-31 | full test suite | **167 pass, 0 fail** (142 pipeline + 25 worker) | `npm test` |
+| 2026-10-31 | v0.1.0 release verification | 167/167; pilot 28.8/30.3 hit@5; blind `VALID` (not run); ablation PASS | tag `v0.1.0`, GitHub pre-release, no launch |
 
 ---
 

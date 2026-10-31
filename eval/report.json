@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-31T09:09:57.286Z",
+  "generated": "2026-10-31T13:33:23.891Z",
   "set": {
     "name": "M0 pilot — 100 items, EN+FA",
     "status": "PILOT — NOT BLIND-REVIEWED",
@@ -16,7 +16,7 @@
       "refusal_recall_target": 0.9
     }
   },
-  "elapsedMs": 417,
+  "elapsedMs": 494,
   "summary": {
     "items": 100,
     "hitAtK": 19,

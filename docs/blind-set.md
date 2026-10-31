@@ -1,7 +1,8 @@
 # Blind evaluation set — protocol
 
-Status: **drafting / frozen after authoring**. This document is the protocol
-the set must follow; the current hash lives in `eval/blind.json` → `_meta.freeze_sha256`.
+Status: **frozen 2026-10-31; not run; scholar review pending.** The current hash
+lives in `eval/blind.json` → `_meta.freeze_sha256`. The protocol below is what
+the set must follow.
 
 ## Why a separate set
 
@@ -51,6 +52,17 @@ usable, and it is the remaining M0 blocker.
   counts, gold refs and language integrity. It runs no retrieval.
 - Any edit to an item invalidates the hash and requires re-freezing and
   re-review.
+
+### Current state (v0.1.0, 2026-10-31)
+
+- 100 items: 50 EN/FA pairs across the five categories above.
+- `node pipeline/tools/validate-blind.ts` prints `freeze verified` and `VALID`.
+- The set has **not been run**, and no blind metric appears in the v0.1.0
+  release notes. The reviewer packet (`docs/blind-review.md`) is generated on
+  demand and is not committed.
+- The v0.1.0 tag includes the frozen set exactly as authored. The planned
+  v0.1.1 retrieval change and the v0.2.0 subject layer both invalidate it; a new
+  blind set is required before any certification claim on changed code.
 
 ## Evaluation rules
 

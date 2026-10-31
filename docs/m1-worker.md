@@ -1,5 +1,8 @@
 # M1 Worker — zero-AI answer API
 
+Release: **v0.1.0 source preview** — GitHub pre-release, 2026-10-31. Not a
+launch.
+
 Status: **deployed to staging; NOT publicly launched.**
 Staging: https://faater.verafired.workers.dev (D1 in WEUR, Turnstile managed).
 The retrieval and card path is complete. The scope and answerability gates
@@ -89,10 +92,12 @@ D1/FTS5 path vs the in-memory retriever that produced the pilot numbers:
 | direct hit@5 | 34.0% | 34.0% |
 | paraphrase hit@5 | 12.5% | 18.8% |
 | MRR | 0.215 | 0.229 |
-| query time | — | 12.3 ms/item local |
+| query time | — | 14.5 ms/item local |
 
 Numbers regenerated 2026-10-31 after the ۀ (Persian heh with hamza) fold and the
 verbatim segment join; the earlier table (27.3/27.3, 6.3/12.5) predates that fix.
+The v0.1.0 release verification measured 14.5 ms/item (an earlier run on the
+same code measured 12.3 ms/item); local timing varies by machine.
 
 The two paths differ in two deliberate ways: FTS5 excludes frame terms from a
 match when content terms exist (it cannot down-weight one term), and FTS5's
@@ -101,7 +106,7 @@ bm25 is its own statistic. Both are documented in `worker/src/retrieve.ts`.
 ## What is missing — do not launch without it
 
 1. **G1 scope classifier.** The pilot measured that retrieval scores cannot
-   separate in-domain unanswerable questions (AUC 0.551, chance). A question
+   separate in-domain unanswerable questions (AUC 0.580, near chance). A question
    like "How many rak'ahs are in Fajr?" will retrieve prayer verses and be
    answered. This is the largest open risk in the product. A zero-provider
    lexical classifier was built and evaluated; it misses the 97% Quran-recall

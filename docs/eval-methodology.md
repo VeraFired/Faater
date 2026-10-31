@@ -156,21 +156,28 @@ threshold is meaningless without the exact index it was fitted against.
 
 Run `npm run eval` to reproduce. Current findings, which constrain the design:
 
-- **No score-shape retrieval feature separates refusal at a usable level**
-  (AUC 0.505–0.543 across `top`, `gap`, `ratio`, `top3mean`, `top5sum`,
-  `fieldCount`). The only signal above 0.60 is `nHits` (query coverage) at
-  0.645 — weak, and capped by the 50-candidate search limit.
-- **In-domain unanswerable questions are at chance (AUC 0.551).** They retrieve
-  as much evidence as answerable questions because they are dense with Quranic
-  vocabulary. At the false-refusal rate that catches 66.7% of out-of-domain
-  questions, a threshold catches 11.1% of them.
+- **No score-shape retrieval feature separates refusal at a usable level.**
+  The strongest is `fieldCount` at AUC 0.661, followed by `nHits` 0.652,
+  `top5sum` 0.633, `top3mean` 0.610 and `top` 0.608. None reaches the 0.700
+  minimum worth building a gate on.
+- **In-domain unanswerable questions remain close to chance (AUC 0.580).**
+  They retrieve nearly as much evidence as answerable questions because they
+  are dense with Quranic vocabulary. At the illustrative 3.0% false-refusal
+  point, the same signal catches 33.3% of out-of-domain questions (4/12) but
+  0.0% of in-domain unanswerable ones (0/18).
 - Therefore **G1 is a classifier on the question**, and no retrieval threshold
   can substitute for it. See ADR-017.
 
 > **Correction 2026-10-31.** An earlier revision reported in-domain AUC 0.337
 > ("worse than chance"). That was an artifact of the Arabic field answering
 > Persian questions with verses that only mentioned «قرآن»; after the frame-only
-> fix the honest value is 0.551. The conclusion stands on the cleaner claim.
+> fix the honest value was 0.551. The v0.1.0 report measures 0.580. The
+> conclusion stands on the cleaner claim.
+
+**SUPERSEDED 2026-10-31 — earlier values.** The pre-release run reported
+`nHits` 0.645 as the only signal above 0.60, in-domain unanswerable 0.551, and
+out-of-domain 0.846. Those numbers came from an earlier index; they are retained
+for history only. Use `eval/report.json` from the tagged commit.
 
 Anything that contradicts these findings must come from a set large enough to
 detect the contradiction. The pilot is not.
@@ -203,13 +210,46 @@ never put a wrong word in front of a user.
 
 ### Measured result (2026-10-31, pilot — provisional)
 
-Fusing the concept lists at the **same weight as a literal field** failed the
-rule: paraphrase rose to 12.5% but direct hit@5 fell 36.0% → 18.0%.
+The v0.1.0 release code measures the layer against its own absence:
 
-`rrf()` therefore takes per-list weights. Concept lists fuse at **0.1**; the
-literal `ar` / `en` / `fa` lists stay at 1.0. At 0.1, a concept list's rank-1
+| metric | literal only | + concept | delta |
+|---|---:|---:|---:|
+| hit@5 | 28.8% | 28.8% | +0.0 pt |
+| gold recall@5 | 13.7% | 14.2% | +0.5 pt |
+| direct hit@5 | 36.0% | 34.0% | -2.0 pt |
+| paraphrase hit@5 | 6.3% | 12.5% | +6.3 pt |
+| MRR | 0.214 | 0.215 | +0.2 pt |
+
+The acceptance rule passes: paraphrase **6.3% → 12.5%**, direct **36.0% →
+34.0%** (exactly the allowed 2.0-point fall), gold recall@5 +0.5 pt, MRR +0.2 pt.
+
+`rrf()` takes per-list weights. Concept lists fuse at **0.1**; the literal
+`ar` / `en` / `fa` lists stay at 1.0. At 0.1, a concept list's rank-1
 contribution is `0.1/61 ≈ 0.0016` against a literal list's `1/61 ≈ 0.0164`, so a
 concept can only promote verses literal retrieval missed or ranked low.
+
+Current sweep (`npm run ablate -- --sweep`):
+
+| weight | hit@5 | direct hit@5 | paraphrase hit@5 | MRR |
+|---:|---:|---:|---:|---:|
+| 0.1 | 28.8% | 34.0% | 12.5% | 0.215 |
+| 0.15 | 28.8% | 34.0% | 12.5% | 0.212 |
+| 0.2 | 25.8% | 30.0% | 12.5% | 0.206 |
+| 0.25 | 24.2% | 28.0% | 12.5% | 0.202 |
+| 0.3 | 22.7% | 26.0% | 12.5% | 0.201 |
+| 0.4 | 24.2% | 26.0% | 18.8% | 0.206 |
+| 0.5 | 24.2% | 26.0% | 18.8% | 0.204 |
+| 0.7 | 22.7% | 24.0% | 18.8% | 0.213 |
+| 1.0 | 25.8% | 28.0% | 18.8% | 0.221 |
+| 0 (off) | 28.8% | 36.0% | 6.3% | 0.214 |
+
+**Earlier experiment (superseded).** Fusing the concept lists at the **same
+weight as a literal field** failed the rule: paraphrase rose to 12.5% but direct
+hit@5 fell 36.0% → 18.0%. That is why `rrf()` takes per-list weights.
+
+**SUPERSEDED 2026-10-31 — earlier index.** The table below is retained for
+history; it came from code before the ۀ fold and the verbatim segment join. Its
+absolute values are not comparable to the current tables above.
 
 | weight | hit@5 | direct hit@5 | paraphrase hit@5 | MRR |
 |---:|---:|---:|---:|---:|
@@ -218,18 +258,15 @@ concept can only promote verses literal retrieval missed or ranked low.
 | 1.0 | 16.7% | 18.0% | 12.5% | 0.146 |
 | 0 (off) | 27.3% | 36.0% | 0.0% | 0.199 |
 
-At 0.1 the acceptance rule passes: paraphrase **0.0% → 6.3%**, direct **36.0%
-→ 36.0%**, gold recall@5 +1.1 pt, MRR +2.6 pt. Refusal signals did not degrade
-(`nHits` AUC 0.645 → 0.661; in-domain unanswerable 0.551 → 0.564, still chance).
-
 Two cautions are part of the result, not footnotes:
 
 1. **The weight was selected on the same pilot it is measured on.** One
    paraphrase item is 6.3 points. Report the direction, never the effect size,
    until the blind set confirms it.
-2. **0.05–0.15 is a plateau**, so 0.1 is chosen for its mechanism (an order of
-   magnitude below a literal field), not because it maximised the sweep. If a
-   future edit moves the plateau, choose again by mechanism and record it.
+2. **0.1 is not the argmax of hit@5** (0.1, 0.15 and "off" tie at 28.8%), so it
+   is chosen for its mechanism (an order of magnitude below a literal field),
+   not because it maximised the sweep. If a future edit moves the plateau,
+   choose again by mechanism and record it.
 
 ```bash
 npm run ablate -- --sweep   # weight sweep, same set, same code

@@ -14,7 +14,8 @@ session needs first. Bugs live in `BUGS.md`.
 | G1 scope classifier | ⛔ built and evaluated, **not wired** — holdout 92.5% vs 97% target |
 | Staging | ✅ https://faater.verafired.workers.dev (public URL, **not a launch**) |
 | Tests | ✅ 167 pass (142 pipeline + 25 worker) |
-| Repo | `origin/init`, latest `8e05ebd`; GitHub repo is **public** |
+| Release | ✅ **v0.1.0 source preview** — GitHub pre-release, not latest, **not a launch** |
+| Repo | `origin/init` and `origin/main` at tag `v0.1.0`; GitHub repo is **public** |
 
 ## Deployed stack
 
@@ -26,11 +27,18 @@ session needs first. Bugs live in `BUGS.md`.
 - `ALLOWED_ORIGIN` is the staging origin; CORS fails closed elsewhere.
 - Turnstile secret was rotated after a CLI print; do not reuse any secret that
   appears in a transcript.
+- Release `v0.1.0` (source preview):
+  https://github.com/VeraFired/Faater/releases/tag/v0.1.0 — a pre-release with
+  no attached assets. It is not a launch.
 
 ## What was verified (not assumed)
 
 - `npm test` 167/167.
 - `wrangler deploy --dry-run` bundles cleanly.
+- `validate-blind.ts` prints `VALID`; the blind set is frozen and has **not**
+  been run.
+- `pnpm ablate` passes: paraphrase hit@5 6.3% → 12.5%, direct 36.0% → 34.0%
+  (within the 2-point allowance).
 - Remote D1 row counts and a known verse (`2:255`).
 - Staging: health, config (site key only), page, CORS, 403 without a token;
   with a token: patience → cards (`70:5` first), `2:255` exact,
@@ -41,20 +49,26 @@ session needs first. Bugs live in `BUGS.md`.
 
 ## Plan — ordered next actions
 
-1. **Bug intake.** Owner is reporting issues now; log every one in `BUGS.md`
-   with a reproducible query and expected/actual. Triage before changing code.
-2. **BUG-001 (Persian alcohol+gambling misses 2:219).** Root cause is measured;
-   choose a fix from the candidates in `BUGS.md` and evaluate it on the pilot
-   **per language**. Do not tune on the blind set.
-3. **G2 out-of-domain floor.** OOD separability is real (AUC 0.846); in-domain
-   unanswerable remains chance (0.551). A floor is the narrowest honest gate.
-4. **Blind-set review (human).** Scholar + native Persian reviewer. Nothing
-   from `eval/blind.json` is quotable until this passes.
+1. **v0.1.1 — BUG-001 targeted fix.** Implement cross-field query-term coverage
+   at fusion (D, primary) plus a language-aware Arabic weight for Persian
+   requests (A). Add `eval/issues/bug-001.json`; gate on the reported Persian
+   phrase and the English alcohol+gambling control in both in-memory and D1
+   paths; keep the pilot direct/paraphrase guard. Deploy to staging as a
+   pre-release. Do **not** mark BUG-001 fixed: Persian `شراب` and English
+   "wine" remain until v0.2.0.
+2. **v0.2.0 — reviewed verse→subject relevance layer.** Owner-reviewed subject
+   labels and edges; scholar sign-off before any public launch. This is the
+   durable polysemy fix and the retrieval half of M4.
+3. **Blind-set review (human).** Scholar + native Persian reviewer. Nothing
+   from `eval/blind.json` is quotable until this passes. Any retrieval change
+   invalidates the frozen set; create a new one before certification.
+4. **G2 out-of-domain floor.** OOD separability is real (AUC 0.815); in-domain
+   unanswerable remains chance (0.580). A floor is the narrowest honest gate.
 5. **M3 dense retrieval.** The measured paraphrase failure (12.5% hit@5) and
    the polysemy case in BUG-001 are the reasons; concept expansion alone is
    not enough.
 6. **Abuse controls and launch hygiene.** Per-IP daily caps, WAF rate-limit
-   rule, Persian copy review, sensitive-verse metadata.
+   rule, Persian copy review, sensitive-verse metadata, legal review.
 
 ## Commands
 
@@ -63,6 +77,8 @@ npm test                 # pipeline + worker, 167 tests
 npm run pipeline         # rebuild corpus + translations + lexicon + D1 seed
 npm run eval             # pilot → eval/report.md / report.json
 npm run eval:d1          # D1/FTS5 parity against the pilot
+node pipeline/tools/validate-blind.ts
+npx wrangler deploy --dry-run
 npx wrangler deploy      # staging
 npx wrangler tail        # live logs
 ```
@@ -79,6 +95,8 @@ Useful one-offs:
 - Quote blind-set metrics before scholar review.
 - Present staging as a launch. G1/G2, rate limits, copy review and
   sensitive-verse metadata are still missing.
+- Present v0.1.0 as a launch or stable release: it is a source preview and a
+  GitHub pre-release.
 - Tune retrieval on `eval/blind.json` or `eval/scope-holdout.json`.
 
 ## Pointers
