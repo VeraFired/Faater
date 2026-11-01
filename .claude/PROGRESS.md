@@ -876,3 +876,26 @@ was present but too weak and too noisy to bridge common topics.
   11.1 ms/item. Issue set v0.1.1: 6/6 both paths. Tests: **210/210**.
 - The weight-sweep line above was measured before this fix; at 0.5 the shipped
   configuration is now 48.5%, not 47.0%.
+
+### 2026-11-01 (evening) — committed, pushed, deployed to staging
+
+- Owner approved commit + push + deploy. Commit `8c9e888` on
+  `fix/bug-001-v0.1.1` (41 files), branch pushed to `origin`; `main`, `init`
+  and the `v0.1.0` tag untouched. No merge, no new tag, no release.
+- D1 `meta.lexicon` upserted on the staging database to the rebuilt 95-concept
+  table (60,644 chars, `gambling` present). One-row `INSERT OR REPLACE`; no
+  schema change and no full 24 MB re-seed. This is required because the Worker
+  reads concepts from `meta.lexicon`, not from the bundle.
+- `wrangler deploy --dry-run` clean (55.85 KiB / 15.05 KiB gzip); deploy
+  succeeded, Worker version `c41a0a35-11a0-459d-b255-c8cdf41df739`, API
+  `m1-0.1.1`.
+- Post-deploy checks: page title `Faater | Quran QA`, `/api/health` ok,
+  `/api/config` returns the site key only, `/api/ask` without a Turnstile
+  token → 403, foreign-origin CORS sends no allow-origin header.
+- The token-gated answer path was **not** exercised live: Turnstile managed
+  mode requires a human click, and automating a bot check is not done. The
+  answer path for this exact code + seed is covered by the 210 tests, the D1
+  parity run and the issue set.
+- Local docs numbers re-verified in the same session: pilot in-memory 48.5 /
+  52.0 / 37.5 / 0.383, D1 47.0 / 48.0 / 43.8 / 0.372 at 10.6 ms/item; concept
+  sweep at 0.5 recorded in `docs/eval-methodology.md`.

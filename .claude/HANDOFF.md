@@ -15,7 +15,7 @@ session needs first. Bugs live in `BUGS.md`.
 | Staging | ✅ https://faater.verafired.workers.dev (public URL, **not a launch**) |
 | Tests | ✅ 210 pass (pipeline + worker) |
 | Release | ✅ **v0.1.0 source preview** — GitHub pre-release, not latest, **not a launch** |
-| Branch | 🟡 `fix/bug-001-v0.1.1` — BUG-001 partial fix (D + A) plus the keyword-matching layer; **not merged, tagged, or deployed** |
+| Branch | 🟡 `fix/bug-001-v0.1.1` — BUG-001 partial fix (D + A) plus the keyword-matching layer; pushed and **deployed to staging** 2026-11-01, **not merged, tagged, or released** |
 | Repo | `origin/init` and `origin/main` at tag `v0.1.0`; GitHub repo is **public** |
 
 ## Deployed stack
@@ -52,11 +52,19 @@ session needs first. Bugs live in `BUGS.md`.
 - Staging: health, config (site key only), page, CORS, 403 without a token;
   with a token: patience → cards (`70:5` first), `2:255` exact,
   `2:999` → `refused/out_of_range`.
+- **Staging deploy 2026-11-01** of this branch: commit `8c9e888`, Worker version
+  `c41a0a35-11a0-459d-b255-c8cdf41df739`, API `m1-0.1.1`. D1 `meta.lexicon`
+  upserted to the 95-concept table (60,644 chars, contains `gambling`); no
+  schema change, no full re-seed. Verified after deploy: page title
+  `Faater | Quran QA`, health, config (site key only), 403 without a Turnstile
+  token, foreign-origin CORS fails closed. The token-gated answer path was not
+  re-run headlessly — Turnstile needs a human — so it is covered by the D1
+  parity run and tests against the same seed, not by a live click-through.
 - Eval is deterministic except `generated` / `elapsedMs`.
 - Current pilot (in-memory / D1): hit@5 **48.5% / 47.0%**, direct
   **52.0% / 48.0%**, paraphrase **37.5% / 43.8%**, MRR **0.383 / 0.372**
-  (11.1 ms/item D1). Concept weight is 0.5; the pilot sweep that chose it is
-  in `PROGRESS.md` (2026-11-01).
+  (10.6 ms/item D1, 2026-11-01 run). Concept weight is 0.5; the pilot sweep that
+  chose it is in `PROGRESS.md` (2026-11-01).
 - Current refusal separation (pilot): OOD AUC **0.936**, in-domain unanswerable
   **0.753**, adversarial **0.807**. In-domain is above the 0.700 bar on the
   pilot, but the pilot is a development set — no gate is wired and this is not
