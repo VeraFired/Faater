@@ -290,7 +290,10 @@ export async function ask(
       : { ...base, status: 'refused', reason: 'off_topic', message: copy.off_topic }
   }
 
-  const hits = await searchD1(db, meta.lexicon, meta.surahs, query, { limit: LIMITS.maxCards })
+  const hits = await searchD1(db, meta.lexicon, meta.surahs, query, {
+    limit: LIMITS.maxCards,
+    language: lang,
+  })
   const refs = hits.map((h) => h.ref)
 
   if (!refs.length) {

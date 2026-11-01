@@ -32,6 +32,7 @@
     { "id": "creation",    "fa": "آفرینش",   "en": "creation",       "keys": ["afarinesh", "afarineš", "khalq", "khalk"] },
     { "id": "light",       "fa": "نور",      "en": "light",          "keys": ["noor", "nur", "nooran"] },
     { "id": "guidance",    "fa": "هدایت",    "en": "guidance",       "keys": ["hedayat", "hidayat", "hedayat"] },
+    { "id": "healing",     "fa": "شفا",      "en": "healing",        "keys": ["shafa", "shefa", "shifa", "darman"] },
     { "id": "misguidance", "fa": "گمراهی",   "en": "misguidance",    "keys": ["gomrahi", "gomrahie", "zalalat"] },
     { "id": "sin",         "fa": "گناه",     "en": "sin",            "keys": ["gonah", "gunah", "gonahi"] },
     { "id": "reward",      "fa": "ثواب",     "en": "reward",         "keys": ["savab", "sawab", "thawab"] },
@@ -84,7 +85,18 @@
     { "id": "truth",       "fa": "حق",       "en": "truth",          "keys": ["hagh", "haq", "haghighat"] },
     { "id": "lie",         "fa": "دروغ",     "en": "lie",            "keys": ["dorugh", "dorough", "kazb"] },
     { "id": "sign",        "fa": "نشانه",    "en": "sign",           "keys": ["neshane", "neshaneh", "neshan"] },
-    { "id": "prophets",    "fa": "پیامبران", "en": "prophets",       "keys": ["payambaran", "anbiya", "ambiya"] }
+    { "id": "prophets",    "fa": "پیامبران", "en": "prophets",       "keys": ["payambaran", "anbiya", "ambiya"] },
+    { "id": "modesty",     "fa": "پوشش",     "en": "modesty",        "keys": ["hejab", "hijab", "pooshesh", "poshesh", "efaf"] },
+    { "id": "arrogance",   "fa": "تکبر",     "en": "arrogance",      "keys": ["takabbor", "takabur", "kebr", "ghurur"] },
+    { "id": "usury",       "fa": "ربا",      "en": "usury",          "keys": ["reba", "riba"] },
+    { "id": "backbiting",  "fa": "غیبت",     "en": "backbiting",     "keys": ["gheybat", "ghibat", "gheebat"] },
+    { "id": "inheritance", "fa": "ارث",      "en": "inheritance",    "keys": ["ers", "erth", "miras"] },
+    { "id": "neighbor",    "fa": "همسایه",   "en": "neighbor",       "keys": ["hamsaye", "hamsayeh", "hamsaya"] },
+    { "id": "wealth",      "fa": "ثروت",     "en": "wealth",         "keys": ["servat", "sarvat", "mal", "darayi"] },
+    { "id": "speech",      "fa": "سخن",      "en": "speech",         "keys": ["sokhan", "goftar", "sohbat"] },
+    { "id": "remembrance", "fa": "یاد خدا",  "en": "remembrance",    "keys": ["yad", "zekr", "zikr"] },
+    { "id": "insult",      "fa": "توهین",    "en": "insult",         "keys": ["tohin", "toheen", "tahghir"] },
+    { "id": "gambling",    "fa": "قمار",     "en": "gambling",       "keys": ["ghomar", "qomar", "shartbandi"] }
   ],
   "names": [
     { "id": "musa",      "fa": "موسی",     "en": "Moses",      "keys": ["musa", "moosa"] },

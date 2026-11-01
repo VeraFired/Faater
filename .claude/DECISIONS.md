@@ -238,8 +238,8 @@ Three separate matching problems produced the same class of silent miss, and the
 
 ---
 
-## ADR-019 — Concept synonyms are search-only, and fuse at weight 0.1
-**Date:** 2026-10-31
+## ADR-019 — Concept synonyms are search-only, and fuse at weight 0.5
+**Date:** 2026-10-31 · **Amended:** 2026-11-01 (weight and concept-list scoring)
 
 **Problem.** Lexical retrieval cannot bridge wording it has never seen: the pilot's
 paraphrase slice scored **0/16 at hit@5**. A user asking "charity" should reach verses
@@ -255,10 +255,10 @@ about «صدقه» / "spend their wealth", and no amount of BM25 tuning produces
    269 of 682 candidates. A concept with no usable term in any language fails the build.
 3. Concept matches generate **separate** BM25 lists per field (`concept:ar`, `concept:en`,
    `concept:fa`), not a query concatenation. Each list keeps its own language statistics.
-4. Concept lists are fused into RRF at **weight 0.1**; literal field lists stay at 1.0.
-   At 0.1, a concept list's rank-1 contribution is `0.1/61 ≈ 0.0016` against a literal
-   list's `1/61 ≈ 0.0164`. A concept can therefore only promote a verse that literal
-   retrieval missed or ranked low — it cannot rewrite the literal head.
+4. Concept lists are fused into RRF at **weight 0.5**; literal field lists stay at 1.0.
+   At 0.5, a concept list's rank-1 contribution is `0.5/61 ≈ 0.0082` against a literal
+   list's `1/61 ≈ 0.0164`: it ties a literal rank-2 verse. A concept can promote a verse
+   that literal retrieval missed, but one exact user word still outweighs one synonym.
 5. Expansion is **on by default**; `--no-concepts` and `conceptExpansion: false` exist for
    ablation and rollback.
 
@@ -268,6 +268,18 @@ from 36.0% to 18.0%. The weights 0.05–0.15 form a **plateau with identical ret
 refusal numbers**, so 0.1 is chosen for its mechanism (an order of magnitude below a
 literal field), not because it was the sweep maximum. Acceptance at 0.1: paraphrase
 0.0 → 6.3%, direct 36.0 → 36.0%, MRR 0.199 → 0.224, overall hit@5 +1.5 pt.
+
+**Amendment 2026-11-01 — weight 0.5.** The 0.1 measurement above was taken before three
+changes that altered what a concept list contains: concept lists stopped being divided by
+the fraction of synonyms matched (`coverage: false`), trigger matching became
+stem-aware, and generic concepts were demoted. Re-swept on the same pilot: 0.1
+40.9/48.0/18.8/MRR 0.288; **0.5 47.0/52.0/31.3/0.381**; 0.7 50.0/50.0/50.0/0.402;
+1.0 50.0/54.0/37.5/0.401. Above 0.5 the paraphrase gain is not monotonic and direct
+topics lose head ranks (prayer 3 → 7), so 0.5 is chosen for its mechanism — a concept
+rank-1 ties a literal rank-2 — not because it is the sweep maximum. After the later
+Persian light-verb coverage fix the shipped configuration measures 48.5/52.0/37.5/MRR
+0.383. This remains a pilot-only, dev-set choice; nothing here is a blind or
+calibration claim.
 
 **Rejected alternatives.**
 - **Unweighted concept fusion** — measured; destroys literal precision (ADR-018's
@@ -306,7 +318,7 @@ option, and a per-request dense scan is worse.
 
 `worker/src/retrieve.ts` reproduces the in-memory semantics on top of SQL:
 three field queries, the frame-term guard, coverage and phrase bonuses, concept
-lists fused at RRF weight 0.1.
+lists fused at RRF weight 0.5 (0.1 before the 2026-11-01 amendment to ADR-019).
 
 **Measured parity (pilot, same items):**
 

@@ -17,7 +17,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { tokenize } from './lib/bm25.ts'
-import { arabicVariants, englishVariants } from './lib/stem.ts'
+import { arabicVariants, englishVariants, persianVariants } from './lib/stem.ts'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const BUILD = join(ROOT, 'data', 'build')
@@ -188,14 +188,14 @@ for (const v of corpus.verses) {
       `${q(JSON.stringify(faV?.footnotes ?? []))}, ` +
       `${q(expandText(arSearch, arabicVariants))}, ` +
       `${q(expandText(enSearch, englishVariants))}, ` +
-      `${q(expandText(faV?.searchText ?? '', arabicVariants))}, ` +
-      `${q(expandText(faV?.searchTextJoined ?? '', arabicVariants))})`,
+      `${q(expandText(faV?.searchText ?? '', persianVariants))}, ` +
+      `${q(expandText(faV?.searchTextJoined ?? '', persianVariants))})`,
   )
   ftsRows.push(
     `(${q(v.ref)}, ${q(expandText(arSearch, arabicVariants))}, ` +
       `${q(expandText(enSearch, englishVariants))}, ` +
-      `${q(expandText(faV?.searchText ?? '', arabicVariants))}, ` +
-      `${q(expandText(faV?.searchTextJoined ?? '', arabicVariants))})`,
+      `${q(expandText(faV?.searchText ?? '', persianVariants))}, ` +
+      `${q(expandText(faV?.searchTextJoined ?? '', persianVariants))})`,
   )
 }
 

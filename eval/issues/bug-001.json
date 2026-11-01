@@ -1,0 +1,82 @@
+[
+  {
+    "id": "bug001-fa-phrase",
+    "phase": "v0.1.1",
+    "lang": "fa",
+    "q": "شراب و قمار",
+    "expect_refs": ["2:219", "5:90", "5:91"],
+    "require_all": true,
+    "top_k": 5,
+    "reject_refs": ["24:31", "2:280"],
+    "note": "The reported defect. All three prohibition verses must be cards."
+  },
+  {
+    "id": "bug001-en-alcohol",
+    "phase": "v0.1.1",
+    "lang": "en",
+    "q": "What does the Quran say about alcohol and gambling?",
+    "expect_refs": ["2:219"],
+    "top_k": 5,
+    "reject_refs": ["24:31", "2:280"],
+    "note": "English worked before the fix; must keep working."
+  },
+  {
+    "id": "control-en-patience",
+    "phase": "v0.1.1",
+    "lang": "en",
+    "q": "What does the Quran say about patience?",
+    "expect_refs": ["2:153", "2:45", "103:3", "3:200"],
+    "top_k": 20
+  },
+  {
+    "id": "control-fa-patience",
+    "phase": "v0.1.1",
+    "lang": "fa",
+    "q": "صبر",
+    "expect_refs": ["2:153"],
+    "top_k": 25
+  },
+  {
+    "id": "control-fa-patience-sentence",
+    "phase": "v0.1.1",
+    "lang": "fa",
+    "q": "قرآن درباره صبر چه می‌گوید؟",
+    "expect_refs": ["2:153"],
+    "top_k": 25,
+    "parity": false,
+    "note": "Sentence form of the patience question. Guards the Arabic-weight gate: the earlier ungated A pushed 2:153 from rank 18 to 36 (memory). Both paths still pass top 25, but their head ranks differ, so rank parity is not asserted."
+  },
+  {
+    "id": "bug001-arabic-script-fa-ui",
+    "phase": "v0.1.1",
+    "lang": "fa",
+    "q": "الخمر والميسر",
+    "expect_refs": ["2:219", "5:90", "5:91"],
+    "require_all": true,
+    "top_k": 5,
+    "reject_refs": ["24:31", "2:280"],
+    "note": "Valid Arabic typed in the Persian UI. The Persian list covers only «ميسر» (2:280), so down-weighting Arabic here would hide 2:219."
+  },
+  {
+    "id": "bug001-fa-word",
+    "phase": "v0.2.0",
+    "lang": "fa",
+    "q": "شراب",
+    "expect_refs": ["2:219", "5:90", "5:91"],
+    "require_all": true,
+    "top_k": 5,
+    "reject_refs": ["24:31", "2:280"],
+    "note": "One-word query: no cross-field coverage to compare. Needs the reviewed subject layer."
+  },
+  {
+    "id": "bug001-en-wine",
+    "phase": "v0.2.0",
+    "lang": "en",
+    "q": "What does the Quran say about wine?",
+    "expect_refs": ["2:219", "5:90", "5:91"],
+    "require_all": true,
+    "top_k": 5,
+    "reject_refs": ["24:31", "2:280"],
+    "note": "One-word sense ambiguity; v0.2.0 subject layer. The whole prohibition cluster, not only 2:219, must reach the cards."
+  }
+]

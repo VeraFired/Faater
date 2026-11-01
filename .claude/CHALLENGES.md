@@ -88,9 +88,22 @@ The M0 pilot (100 items) measured every candidate gate signal (top, gap, ratio, 
 | **in-domain unanswerable** | 18 | **0.551** | 11.1% (2/18) |
 | adversarial | 4 | 0.470 | 0.0% (0/4) |
 
-The best signal is **`nHits` (query coverage) at 0.645** — weak, and it is capped by the 50-candidate search limit. Every score-shape signal (`top`, `gap`, `ratio`, `top3mean`, `top5sum`, `fieldCount`) is **0.505–0.543 — indistinguishable from chance**.
+**Update 2026-11-01 (keyword layer) — the numbers moved, the conclusion did not.**
+On the current pilot the strongest signal is `top` at AUC 0.817 (`top3mean`
+0.815, `fieldCount` 0.808, `top5sum` 0.805); separation by refusal type is
+**OOD 0.933, adversarial 0.799, in-domain unanswerable 0.744**. The table above
+came from an index with much weaker answerable retrieval and is superseded.
+At the illustrative 4.5% false-refusal point (3/66) the same signal catches
+**83.3% (10/12)** of out-of-domain questions but **38.9% (7/18)** of in-domain
+unanswerable ones — a 0.189 AUC gap, and the in-domain group is exactly the one
+a threshold cannot catch. **No operating point is certified:** with 66
+answerable items, zero false refusals still allows a 5.4% upper bound, above the
+5% budget, and the 34 should-refuse items are 17 paired EN/FA questions, so a
+zero-error result still permits 19.5% per language. G1 remains mandatory.
 
-**The 0.551 is the important number: in-domain unanswerable questions are at chance.** "How many rak'ahs are in the Fajr prayer?" retrieves as much evidence as "What does the Quran say about patience?", because it is dense with prayer vocabulary. At the same false-refusal rate that catches 67% of out-of-domain questions, a threshold catches **11%** of these.
+The best earlier signal was **`nHits` (query coverage) at 0.645** — weak, and it is capped by the 50-candidate search limit. On the old index every score-shape signal (`top`, `gap`, `ratio`, `top3mean`, `top5sum`, `fieldCount`) was **0.505–0.543 — indistinguishable from chance**.
+
+**The in-domain number is the important one.** "How many rak'ahs are in the Fajr prayer?" retrieves nearly as much evidence as "What does the Quran say about patience?", because it is dense with prayer vocabulary. At the same false-refusal rate that catches 83% of out-of-domain questions, a threshold catches **39%** of these — and the pilot's 34 should-refuse items cannot certify any threshold. A gate that fires on the wrong nine of eighteen is not a product.
 
 **Consequence:** G1 (scope classification on the question) is mandatory and cannot be replaced by a retrieval threshold. G2 remains a floor for the out-of-domain case only. This is now evidence rather than a design assumption.
 
@@ -119,16 +132,24 @@ The top-5 for "charity" (57:18, 2:263) and "arrogance" (23:67, 7:206) are genuin
 
 **Update 2026-10-31 (M1 slice 1).** A second frame-term defect surfaced while porting to D1: the word "quran" matched the *quran concept*, so a question whose topical word was absent from the translation expanded into verses that merely mention the Book. Concept matching now ignores frame-only triggers whenever the query has content words. Pilot effect: hit@5 28.8% → 27.3%, direct 36.0% → 34.0% — the removed hits were correct-looking garbage.
 
-**Update 2026-10-31 (hardening).** After the ۀ (Persian heh with hamza) fold and the verbatim segment join, the current pilot is hit@5 **28.8%**, direct 34.0%, paraphrase **12.5%** (2/16), MRR 0.215; D1 parity 30.3% / 34.0% / 18.8% / 0.229. Paraphrase is still the failure: 14 of 16 items miss, so dense retrieval (M3) remains the remedy.
+**Update 2026-10-31 (hardening).** After the ۀ (Persian heh with hamza) fold and the verbatim segment join, the pilot was hit@5 **28.8%**, direct 34.0%, paraphrase **12.5%** (2/16), MRR 0.215; D1 parity 30.3% / 34.0% / 18.8% / 0.229.
+
+**Update 2026-11-01 (keyword layer).** Concept lists stopped being divided by the fraction of synonyms matched, trigger matching became stem-aware, generic concepts were demoted, and the weight moved to 0.5. The layer now carries 95 concepts (new: healing, gambling, backbiting, usury, inheritance, neighbour, remembrance, insult, modesty, arrogance; generosity folded into charity). Pilot: hit@5 **48.5%** in-memory / **47.0%** D1, paraphrase **37.5% / 43.8%**, MRR 0.383 / 0.372. Six of sixteen paraphrase items still miss; dense retrieval (M3) remains the intended remedy for those, and for the long-verse bias (17:23, 2:285 never reach the head).
 
 ## 🟡 Concept synonyms are unreviewed — search-only, but still load-bearing
 The synonym file was drafted by agents and verified only for **corpus existence**, not for **sense**. `df.ts` proves a term occurs; it cannot prove «صدقه» is the right Arabic term for the concept "charity" in every verse it touches. Moving a wrong-sense verse into the candidate set is invisible until a human reads it.
 **Mitigations in place:** synonyms are never displayed; the file is labelled `_review: UNREVIEWED`; content rules already forbid interpreting.
-**Required before any ship:** a native EN + FA reviewer passes all 83 concepts; re-run the ablation after review, because edits change the measured weight plateau.
+**Required before any ship:** a native EN + FA reviewer passes all 95 concepts; re-run the ablation after review, because edits change the measured weight plateau.
 
 ## 🟡 The concept weight was tuned on the pilot it is measured on
-`conceptWeight = 0.1` was chosen from a sweep on `eval/pilot.json`. The 0.05–0.15 band is a plateau with identical numbers, which is why it is a mechanism choice rather than an argmax — but with **16 paraphrase items, one item is 6.3 points**, and the same set produced the number being quoted.
-**Rule:** report the direction, not the +6.3 pt effect size; do not treat 0.1 as validated until the blind set confirms it.
+`conceptWeight = 0.5` (was 0.1) was chosen from a sweep on `eval/pilot.json`,
+after the concept-list scoring and trigger matching changed. The chosen point
+is a mechanism choice (a concept rank-1 ties a literal rank-2), not the sweep
+maximum — 0.7 and 1.0 scored higher on MRR but cost direct head ranks. With
+**16 paraphrase items, one item is 6.3 points**, and the same set produced the
+number being quoted.
+**Rule:** report the direction, not the effect size; do not treat 0.5 as
+validated until a fresh blind set confirms it on changed code.
 
 ## 🟡 Evaluation is underpowered as originally scoped
 With 75 unanswerable items per language, one error is 1.33% — a "≤2% false answer" target cannot be measured. The original 2% / 10% / 95% targets were mutually inconsistent.

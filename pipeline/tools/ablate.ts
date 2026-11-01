@@ -24,8 +24,23 @@ const setPath =
 const set: EvalSet = JSON.parse(await readFile(setPath, 'utf8'))
 const data = await loadData()
 
-const measure = (conceptExpansion: boolean, conceptWeight = 0.1) => {
-  const ev = runEval(set.items, new Retriever(data, { conceptExpansion, conceptWeight }), 5, 0.05)
+const measure = (conceptExpansion: boolean, conceptWeight = 0.5) => {
+  // This tool isolates the concept layer. The v0.1.1 defaults (coverage rerank
+  // and the Persian Arabic weight) are deliberately pinned off in both arms;
+  // leaving them on made the "literal only" arm already include both changes,
+  // so the concept-layer acceptance rule could no longer measure its own
+  // contribution. `ablate-fusion.ts` measures A and D separately.
+  const ev = runEval(
+    set.items,
+    new Retriever(data, {
+      conceptExpansion,
+      conceptWeight,
+      coverageRerank: false,
+      faQueryArWeight: 1,
+    }),
+    5,
+    0.05,
+  )
   const at = (curve: typeof ev.curves.all) => curve.find((c) => c.k === 5)!
   const all = at(ev.curves.all)
   const direct = at(ev.curves.direct)

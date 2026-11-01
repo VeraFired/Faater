@@ -1,7 +1,8 @@
 # M1 Worker — zero-AI answer API
 
 Release: **v0.1.0 source preview** — GitHub pre-release, 2026-10-31. Not a
-launch.
+launch. The `fix/bug-001-v0.1.1` branch carries an unreleased targeted fix and
+a keyword-matching layer; it is not merged, tagged or deployed.
 
 Status: **deployed to staging; NOT publicly launched.**
 Staging: https://faater.verafired.workers.dev (D1 in WEUR, Turnstile managed).
@@ -39,7 +40,7 @@ The answer path is:
 ```
 G0 input guard
   → crisis / tafsir / meaning branch (fixed copy, no retrieval)
-  → retrieval (D1 FTS5, ar + en + fa, weighted RRF, concepts at 0.1)
+  → retrieval (D1 FTS5, ar + en + fa, weighted RRF, concepts at 0.5)
   → zero results? refuse with fixed copy
   → verse cards (Arabic verbatim + EN + FA translations, links, context refs)
 ```
@@ -88,16 +89,21 @@ D1/FTS5 path vs the in-memory retriever that produced the pilot numbers:
 
 | metric | in-memory | D1/FTS5 |
 |---|---:|---:|
-| hit@5 | 28.8% | 30.3% |
-| direct hit@5 | 34.0% | 34.0% |
-| paraphrase hit@5 | 12.5% | 18.8% |
-| MRR | 0.215 | 0.229 |
-| query time | — | 14.5 ms/item local |
+| hit@5 | 48.5% (32/66) | 47.0% (31/66) |
+| direct hit@5 | 52.0% (26/50) | 48.0% (24/50) |
+| paraphrase hit@5 | 37.5% (6/16) | 43.8% (7/16) |
+| MRR | 0.383 | 0.372 |
+| query time | — | 10.6 ms/item local |
 
-Numbers regenerated 2026-10-31 after the ۀ (Persian heh with hamza) fold and the
-verbatim segment join; the earlier table (27.3/27.3, 6.3/12.5) predates that fix.
-The v0.1.0 release verification measured 14.5 ms/item (an earlier run on the
-same code measured 12.3 ms/item); local timing varies by machine.
+Numbers regenerated 2026-11-01 on the `fix/bug-001-v0.1.1` branch after the
+keyword-matching layer (concept weight 0.5, stem-aware triggers, coverage
+opt-out, verse exclusions), the full-question coverage bonus and the gated
+language-aware Arabic weight. The two paths land within a few items of each
+other (EN +1, FA −2, direct −2, paraphrase +1 in favour of D1/FTS5); that is
+the known BM25-vs-FTS5 statistic difference, not a regression from the keyword
+layer. The v0.1.0 tag measured 28.8/30.3 hit@5, 34.0/34.0 direct, 12.5/18.8
+paraphrase and 0.215/0.229 MRR; earlier pre-ۀ tables are retained in history
+only. Local timing varies by machine.
 
 The two paths differ in two deliberate ways: FTS5 excludes frame terms from a
 match when content terms exist (it cannot down-weight one term), and FTS5's
@@ -105,13 +111,18 @@ bm25 is its own statistic. Both are documented in `worker/src/retrieve.ts`.
 
 ## What is missing — do not launch without it
 
-1. **G1 scope classifier.** The pilot measured that retrieval scores cannot
-   separate in-domain unanswerable questions (AUC 0.580, near chance). A question
-   like "How many rak'ahs are in Fajr?" will retrieve prayer verses and be
-   answered. This is the largest open risk in the product. A zero-provider
-   lexical classifier was built and evaluated; it misses the 97% Quran-recall
-   target on an independent holdout (Persian 95.0%), so it is **not wired**.
-   The experiment, data and reproduction steps are in `docs/g1-scope.md`.
+1. **G1 scope classifier.** The pilot measured that retrieval scores do not
+   separate in-domain unanswerable questions well enough to gate: out-of-domain
+   AUC 0.933 but in-domain unanswerable 0.744, and at the illustrative 4.5%
+   false-refusal point the same signal catches 83.3% of out-of-domain questions
+   against 38.9% of in-domain unanswerable ones. No threshold is certified at
+   this sample size (34 should-refuse items; a zero-error result still permits
+   a 19.5% true rate per language). A question like "How many rak'ahs are in
+   Fajr?" will retrieve prayer verses and be answered. This is the largest open
+   risk in the product. A zero-provider lexical classifier was built and
+   evaluated; it misses the 97% Quran-recall target on an independent holdout
+   (Persian 95.0%), so it is **not wired**. The experiment, data and
+   reproduction steps are in `docs/g1-scope.md`.
 2. **G2/G3.** No learned retrieval floor or answerability score. Refusal today
    happens only when retrieval returns nothing.
 3. **Rate limiting and abuse control.** Turnstile is wired (secret-gated), but
@@ -132,7 +143,9 @@ bm25 is its own statistic. Both are documented in `worker/src/retrieve.ts`.
 - `worker/src/index.ts` — HTTP handler, CORS, Turnstile
 - `pipeline/build-d1.ts` — schema + seed generator
 - `pipeline/tools/eval-d1.ts` — parity check against the pilot
-- `worker/tests/ask.test.ts` — 20 contract tests against the real seed
+- `worker/tests/ask.test.ts` — 22 contract tests against the real seed
+- `worker/tests/retrieve.test.ts` — D1 retrieval tests (coverage, language
+  weight, concept exclusions)
 - `worker/tests/http.test.ts` — CORS fail-closed and Turnstile config tests (no DB)
 
 ## Frontend

@@ -1,8 +1,9 @@
 # Bug log
 
 Owner-reported defects, with reproduction and evidence. Status values:
-`OPEN`, `INVESTIGATING`, `FIXED`, `WONTFIX`. Severity: **P1** = wrong answer to
-a plainly valid question; **P2** = degraded but usable; **P3** = cosmetic.
+`OPEN`, `INVESTIGATING`, `PARTIALLY FIXED`, `FIXED`, `WONTFIX`. Severity:
+**P1** = wrong answer to a plainly valid question; **P2** = degraded but
+usable; **P3** = cosmetic.
 
 Add new reports at the bottom. Every entry needs: exact query, language,
 expected, actual, and where it was seen (staging or local).
@@ -11,7 +12,7 @@ expected, actual, and where it was seen (staging or local).
 
 ## BUG-001 — Persian «شراب و قمار» buries 2:219 below the card cutoff
 
-- **Status:** OPEN
+- **Status:** PARTIALLY FIXED — v0.1.1 branch candidate, not released or merged
 - **Severity:** P1 — a plainly valid topical question misses its exact verse
 - **Reported:** 2026-10-31 by owner, seen on staging
 - **Language:** Persian (fa)
@@ -68,6 +69,9 @@ So the Persian field ranks 2:219 correctly at #3. The damage happens in fusion.
    Arabic شراب and therefore feeds the Paradise-wine verses; there is **no
    `gambling` concept** (قمار / ميسر) to pull the prohibition cluster. The
    concept weight (0.1) is too small to correct the boundary anyway.
+   *SUPERSEDED 2026-11-01: the weight is now 0.5, a `gambling` concept exists,
+   and `wine` / `gambling` carry verse exclusions for the veil/deferment false
+   friends. The ranked result above was measured before those changes.*
 4. **The card cutoff hides it.** Rank 8 with `maxCards = 5`.
 
 Not the cause: the Persian translation in `persian_ih` does contain both
@@ -86,7 +90,7 @@ the Arabic index is searched with Persian words.
 |---|---|---|
 | A | **Language-aware `ar` weight**: for a detected-Persian query, down-weight or skip the literal `ar` list unless the query has Arabic markers (ال، في، من) or the fa list is empty. | Loses Arabic recall for Persian queries that only match scripture; must be ablated per language. |
 | B | **Persian→Arabic canonical bridge**: map query terms to Qur'anic Arabic via a reviewed bridge (شراب→خمر, قمار→ميسر) as a separate list, not by searching raw Persian tokens in `ar`. | Needs a reviewed lexical resource; شراب→خمر still includes 47:15 (Paradise), but ميسر is unique to the prohibition cluster. |
-| C | **Concept sense split + gambling concept**: split `wine` into `wine_paradise` and `intoxicants`; add `gambling` (en: gambling/betting/wager; ar: ميسر; fa: قمار). | Concept data is UNREVIEWED; weight 0.1 may be too weak to change rank. |
+| C | **Concept sense split + gambling concept**: split `wine` into `wine_paradise` and `intoxicants`; add `gambling` (en: gambling/betting/wager; ar: ميسر; fa: قمار). | Concept data is UNREVIEWED. Implemented in part 2026-11-01: `gambling` added, `wine`/`gambling` have verse exclusions, weight now 0.5. |
 | D | **Cross-field term-coverage bonus**: at fusion, boost documents that match more distinct query terms across fields (2:219 matches both; Paradise verses match one). | Changes RRF semantics; must not degrade direct hit@5. |
 | E | **Dense retrieval (M3)**: semantic candidate generation. | Long-term; embeddings can still conflate the two wine senses. |
 
@@ -102,6 +106,75 @@ counterpart. Acceptance: direct hit@5 must not fall; paraphrase must not fall;
 - en: `What does the Quran say about wine?` → expect 2:219, 5:90, 5:91
 - en: `What does the Quran say about alcohol and gambling?` → 2:219 currently #3
 - control: en: `What does the Quran say about patience?` → unchanged
+
+---
+
+### v0.1.1 result — D + A (2026-10-31, branch `fix/bug-001-v0.1.1`)
+
+Implemented, not yet merged/tagged/deployed:
+
+- **D — cross-field full-question coverage at fusion.** The query is grouped into
+  content terms (ZWNJ split/joined forms and inflections merge; stopwords and
+  frame terms are dropped; punctuation separates topics). A fused candidate's
+  score is multiplied by `1 + coverageAlpha` only when it matches **every**
+  eligible query group across the literal ar/en/fa lists. Partial coverage is
+  deliberately not rewarded: an earlier fractional version lifted unrelated
+  2:219 to rank 1 for «درباره نحوه سخن گفتن با مردم راهنمایی وجود دارد؟»
+  because the question shares «مردم», «وجود» and «دارد» with that verse.
+  Concept lists never count; a single-group query is a no-op.
+- **A — language-aware Arabic weight.** When the request language is `fa` and
+  the Persian literal list covers at least **two** query groups, the Arabic
+  literal list's RRF weight is **0.3**. The request language is used, not script
+  detection, because «شراب و قمار» is valid Arabic script too. The two-group
+  gate prevents a recall regression on Arabic-script questions typed in the
+  Persian UI: «الخمر والميسر» is Arabic, and the Persian list finds only
+  «ميسر» (2:280), so down-weighting Arabic there hid 2:219.
+- Both implementations: `pipeline/lib/retrieve.ts` and `worker/src/retrieve.ts`.
+  `ask()` passes the detected language; `eval.ts` and `eval-d1.ts` pass the
+  item language.
+
+Measured with `limit: 50` (card cutoff remains 5):
+
+| query | v0.1.0 rank (memory / D1) | v0.1.1 rank (memory / D1) |
+|---|---:|---:|
+| fa «شراب و قمار» | 7 / 8 | **3 / 3** |
+| fa «شراب» | 20 / 20 | 20 / 20 (v0.2.0) |
+| en "What does the Quran say about wine?" | 7 / 7 | 7 / 7 (v0.2.0) |
+| en "What does the Quran say about alcohol and gambling?" | 3 / 3 | 3 / 3 |
+
+*SUPERSEDED 2026-11-01 by the keyword layer: without changing A or D, fa
+«شراب» now puts 2:219 at #9 in-memory / #6 in D1, and en "wine" at #7 / #4.
+Both still fail the v0.2.0 `require_all` item (the rest of the prohibition
+cluster is outside the top 5), so the planned subject layer is unchanged.*
+
+Variant isolates (2:219 rank, memory / D1): base 7/8; A alone 6/7; D alone
+3/3; A+D 3/3. For the reported query, both paths return top 5:
+in-memory `5:90, 5:91, 2:219, 37:45, 56:18`; D1 `5:91, 5:90, 2:219, 37:45,
+83:25`. The false friends 24:31 (خُمُر = veils) and 2:280 (ميسرة = deferment)
+are not in the top 5.
+
+Evidence:
+
+- `eval-issues.ts --phase v0.1.1`: **6/6 PASS in both paths**, including both
+  patience controls, the patience sentence, and the Arabic-script query.
+  `eval/issues/bug-001.json`.
+- Pilot in-memory: hit@5 **48.5%** (32/66); direct **52.0%** (26/50);
+  paraphrase **37.5%** (6/16); MRR **0.383**.
+- Pilot D1: hit@5 **47.0%** (31/66); direct **48.0%** (24/50); paraphrase
+  **43.8%** (7/16); MRR **0.372**.
+- The pilot numbers above include the keyword-layer work done after A+D:
+  concept weight 0.5 (was 0.1), stem-expanded trigger/field matching, concept
+  coverage opt-out, Arabic-prefix stemming, and new/cleaned synonym entries.
+  The A+D ablation itself adds +3.0 hit@5 with no paraphrase loss
+  (`ablate-fusion.ts`), after the Persian light-verb fix below.
+- Ablation acceptance PASS: overall hit@5 does not fall, direct and paraphrase
+  within 2 points. Arabic-weight sweep is flat on hit@5/direct/paraphrase from
+  0 to 0.45; MRR at 0.3 is 0.228 against 0.218 at 0.6. The gate removes the old
+  collateral: the patience sentence's gold 2:153 stays at rank 18 instead of 36.
+- Tests: 210/210. Blind set unchanged and **not run**.
+
+Still open: fa `شراب` (#20) and en "wine" (#7) need the reviewed verse→subject
+layer in v0.2.0. This entry stays **PARTIALLY FIXED**, not FIXED.
 
 ---
 

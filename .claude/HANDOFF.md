@@ -1,6 +1,6 @@
 # Handoff — current working state
 
-Updated **2026-10-31**. `PROGRESS.md` is the historical record (append-only);
+Updated **2026-11-01**. `PROGRESS.md` is the historical record (append-only);
 this file is the current state, the plan, and the operating notes a future
 session needs first. Bugs live in `BUGS.md`.
 
@@ -13,8 +13,9 @@ session needs first. Bugs live in `BUGS.md`.
 | M2 UI | 🟡 slice 1 live — static EN/FA/RTL, no PWA/sitemap/Astro |
 | G1 scope classifier | ⛔ built and evaluated, **not wired** — holdout 92.5% vs 97% target |
 | Staging | ✅ https://faater.verafired.workers.dev (public URL, **not a launch**) |
-| Tests | ✅ 167 pass (142 pipeline + 25 worker) |
+| Tests | ✅ 210 pass (pipeline + worker) |
 | Release | ✅ **v0.1.0 source preview** — GitHub pre-release, not latest, **not a launch** |
+| Branch | 🟡 `fix/bug-001-v0.1.1` — BUG-001 partial fix (D + A) plus the keyword-matching layer; **not merged, tagged, or deployed** |
 | Repo | `origin/init` and `origin/main` at tag `v0.1.0`; GitHub repo is **public** |
 
 ## Deployed stack
@@ -33,37 +34,54 @@ session needs first. Bugs live in `BUGS.md`.
 
 ## What was verified (not assumed)
 
-- `npm test` 167/167.
-- `wrangler deploy --dry-run` bundles cleanly.
-- `validate-blind.ts` prints `VALID`; the blind set is frozen and has **not**
-  been run.
-- `pnpm ablate` passes: paraphrase hit@5 6.3% → 12.5%, direct 36.0% → 34.0%
-  (within the 2-point allowance).
-- Remote D1 row counts and a known verse (`2:255`).
+- `npm test` 210/210.
+- `wrangler deploy --dry-run` bundles cleanly (re-run on this branch before any
+  deploy).
+- `validate-blind.ts` prints `VALID`; the blind set is frozen, byte-identical,
+  and has **not** been run.
+- `pnpm ablate` passes: paraphrase hit@5 6.3% → 37.5%, direct 36.0% → 48.0%
+  (the rule allows a 2-point direct drop; there is none).
+- `pnpm ablate:fusion` passes the BUG-001 acceptance at the shipped concept
+  weight: hit@5 45.5% → 48.5%, direct 48.0% → 52.0%, paraphrase unchanged at
+  37.5%, MRR 0.365 → 0.383. D is a full-coverage bonus; A is gated on Persian
+  covering two query groups.
+- `pnpm eval:issues -- --phase v0.1.1`: 6/6 in both in-memory and D1 paths;
+  Persian `شراب و قمار` puts `5:90`, `5:91`, `2:219` in the top 5, with 24:31
+  and 2:280 absent. Arabic-script `الخمر والميسر` in the Persian UI also keeps
+  2:219 in the top 5.
 - Staging: health, config (site key only), page, CORS, 403 without a token;
   with a token: patience → cards (`70:5` first), `2:255` exact,
   `2:999` → `refused/out_of_range`.
 - Eval is deterministic except `generated` / `elapsedMs`.
-- Current pilot (in-memory / D1): hit@5 **28.8% / 30.3%**, direct
-  34.0% / 34.0%, paraphrase 12.5% / 18.8%, MRR 0.215 / 0.229.
+- Current pilot (in-memory / D1): hit@5 **48.5% / 47.0%**, direct
+  **52.0% / 48.0%**, paraphrase **37.5% / 43.8%**, MRR **0.383 / 0.372**
+  (11.1 ms/item D1). Concept weight is 0.5; the pilot sweep that chose it is
+  in `PROGRESS.md` (2026-11-01).
+- Current refusal separation (pilot): OOD AUC **0.936**, in-domain unanswerable
+  **0.753**, adversarial **0.807**. In-domain is above the 0.700 bar on the
+  pilot, but the pilot is a development set — no gate is wired and this is not
+  a calibration claim.
 
 ## Plan — ordered next actions
 
-1. **v0.1.1 — BUG-001 targeted fix.** Implement cross-field query-term coverage
-   at fusion (D, primary) plus a language-aware Arabic weight for Persian
-   requests (A). Add `eval/issues/bug-001.json`; gate on the reported Persian
-   phrase and the English alcohol+gambling control in both in-memory and D1
-   paths; keep the pilot direct/paraphrase guard. Deploy to staging as a
-   pre-release. Do **not** mark BUG-001 fixed: Persian `شراب` and English
-   "wine" remain until v0.2.0.
+1. **v0.1.1 — BUG-001 targeted fix (implemented on branch).** Cross-field
+   query-term coverage (D, full coverage only) plus a language-aware Arabic
+   weight for Persian requests (A, 0.3, gated on the Persian field covering at
+   least two query groups). Issue set, controls, and both retrieval paths pass.
+   Owner decides whether to commit/tag/deploy; do **not** release without that
+   instruction. Do **not** mark BUG-001 fixed: Persian `شراب` (2:219 #9
+   in-memory / #6 D1) and English "wine" (#7 / #4, remaining cluster #12–13)
+   still need the v0.2.0 subject layer.
 2. **v0.2.0 — reviewed verse→subject relevance layer.** Owner-reviewed subject
    labels and edges; scholar sign-off before any public launch. This is the
    durable polysemy fix and the retrieval half of M4.
 3. **Blind-set review (human).** Scholar + native Persian reviewer. Nothing
    from `eval/blind.json` is quotable until this passes. Any retrieval change
    invalidates the frozen set; create a new one before certification.
-4. **G2 out-of-domain floor.** OOD separability is real (AUC 0.815); in-domain
-   unanswerable remains chance (0.580). A floor is the narrowest honest gate.
+4. **G2 out-of-domain floor.** OOD separability is stronger after the keyword
+   layer (pilot AUC 0.936, in-domain 0.753, adversarial 0.807), but these are
+   development-set numbers and no gate is wired. A floor is the narrowest
+   honest gate; recalibrate before wiring it.
 5. **M3 dense retrieval.** The measured paraphrase failure (12.5% hit@5) and
    the polysemy case in BUG-001 are the reasons; concept expansion alone is
    not enough.
@@ -73,10 +91,12 @@ session needs first. Bugs live in `BUGS.md`.
 ## Commands
 
 ```bash
-npm test                 # pipeline + worker, 167 tests
+npm test                 # pipeline + worker, 210 tests
 npm run pipeline         # rebuild corpus + translations + lexicon + D1 seed
 npm run eval             # pilot → eval/report.md / report.json
 npm run eval:d1          # D1/FTS5 parity against the pilot
+npm run eval:issues -- --phase v0.1.1   # targeted BUG-001 issue set, both paths
+npm run ablate:fusion    # A/D acceptance + weight sweeps
 node pipeline/tools/validate-blind.ts
 npx wrangler deploy --dry-run
 npx wrangler deploy      # staging
@@ -97,6 +117,8 @@ Useful one-offs:
   sensitive-verse metadata are still missing.
 - Present v0.1.0 as a launch or stable release: it is a source preview and a
   GitHub pre-release.
+- Present the v0.1.1 branch as merged, tagged, or deployed before the owner
+  approves that step.
 - Tune retrieval on `eval/blind.json` or `eval/scope-holdout.json`.
 
 ## Pointers

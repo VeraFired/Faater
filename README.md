@@ -1,7 +1,8 @@
 # Faater
 
 **A free, public, Qur'an-grounded Q&A system in English and Persian.**
-Source preview — **not a launch**. v0.1.0 is a GitHub pre-release.
+Source preview — **not a launch**. v0.1.0 is the published GitHub pre-release;
+the `fix/bug-001-v0.1.1` branch carries an unreleased targeted fix.
 
 > قُلِ اللَّهُمَّ فَاطِرَ السَّمَاوَاتِ وَالْأَرْضِ عَالِمَ الْغَيْبِ وَالشَّهَادَةِ أَنتَ تَحْكُمُ بَيْنَ عِبَادِكَ فِي مَا كَانُوا فِيهِ يَخْتَلِفُونَ
 >
@@ -19,10 +20,10 @@ instance. No SLA, may reset, and not presented as a launch.
 
 | | |
 |---|---|
-| Version | `v0.1.0` source preview (GitHub pre-release) |
+| Version | `0.1.1` branch candidate (unreleased); `v0.1.0` is the published pre-release |
 | Scope | EN + FA; Qur'an only; deterministic answer path |
-| Tests | 167 pass (142 pipeline + 25 worker) |
-| Pilot retrieval | hit@5 28.8% in-memory / 30.3% D1 — pilot only, not blind, not certified |
+| Tests | 210 pass (pipeline + worker) |
+| Pilot retrieval | hit@5 48.5% in-memory / 47.0% D1 — pilot only, not blind, not certified |
 | Launch readiness | **not launch-ready** — see known blockers |
 
 ## Quick start
@@ -32,7 +33,7 @@ Requires Node.js >= 24.
 ```bash
 pnpm install
 pnpm pipeline                 # pinned sources -> data/build/ (gitignored)
-npm test                      # 167 tests
+npm test                      # 210 tests
 pnpm eval                     # 100-item pilot -> eval/report.md
 pnpm eval:d1                  # D1/FTS5 parity against the same pilot
 npx wrangler deploy --dry-run # bundle check; needs no Cloudflare credentials
@@ -48,8 +49,10 @@ To run the Worker locally against a real D1 database, follow
   `persian_ih` editions; Arabic is displayed verbatim, never edited.
 - Normalized search fields for Arabic, English, Persian, plus a joined Persian
   field; indexed with D1 FTS5.
-- Trilingual BM25 retrieval, 83 concept synonym lists, and weighted reciprocal
-  rank fusion (k=60; concept lists 0.1, literal fields 1.0); five cards maximum.
+- Trilingual BM25 retrieval, 95 concept synonym lists, and weighted reciprocal
+  rank fusion (k=60; concept lists 0.5, literal fields 1.0); five cards maximum.
+  A full-question coverage bonus (v0.1.1) prefers a verse that contains every
+  eligible query term across the literal fields.
 - Fixed input guards, fixed refusal/boundary copy, and verse cards built from
   the corpus. No model call, no provider on the critical path.
 - Static EN/FA/RTL frontend served by the same Worker; Turnstile-gated API with
@@ -84,24 +87,31 @@ development set, not the blind set, and it has not been scholar-reviewed.
 
 | metric | in-memory | D1/FTS5 |
 |---|---:|---:|
-| hit@5 | 28.8% (19/66) | 30.3% (20/66) |
-| direct hit@5 | 34.0% (17/50) | 34.0% (17/50) |
-| paraphrase hit@5 | 12.5% (2/16) | 18.8% (3/16) |
-| MRR | 0.215 | 0.229 |
+| hit@5 | 48.5% (32/66) | 47.0% (31/66) |
+| direct hit@5 | 52.0% (26/50) | 48.0% (24/50) |
+| paraphrase hit@5 | 37.5% (6/16) | 43.8% (7/16) |
+| MRR | 0.383 | 0.372 |
 
-The concept layer clears its pre-registered acceptance rule: paraphrase hit@5
-rises 6.3% → 12.5%, direct hit@5 falls 36.0% → 34.0% (exactly the allowed 2.0
-points). The blind set is frozen and **has not been run**; no blind metric is
-quoted anywhere in this release.
+The concept layer clears its pre-registered acceptance rule by a wide margin:
+with A and D pinned off in both arms, paraphrase hit@5 rises 6.3% → 37.5% and
+direct hit@5 rises 36.0% → 48.0% at the shipped weight of 0.5. The weight sweep
+put 0.5 at hit@5 48.5% / MRR 0.383; higher weights added no monotonic paraphrase
+gain and cost head ranks on direct topics (prayer 3 → 7), so 0.5 is the
+mechanism choice, not an argmax. The v0.1.1 fusion change clears its own rule:
+hit@5 rises 45.5% → 48.5%, direct 48.0% → 52.0%, paraphrase unchanged, MRR
+0.365 → 0.383. The blind set is frozen and **has not been run**; no blind
+metric is quoted anywhere in this branch.
 
 ## Known blockers
 
-- **BUG-001 (open).** Persian `شراب و قمار` puts 2:219 at rank 7 in-memory / 8
-  in D1, outside the five-card cutoff. English "alcohol and gambling" finds it
-  at rank 3; English "wine" at rank 7 and Persian `شراب` at rank 20. The root
-  cause is polysemy between the prohibition verses and Paradise-wine verses,
-  made worse by searching raw Persian tokens in the Arabic field. A targeted
-  fix is planned for v0.1.1; the reviewed subject layer is v0.2.0.
+- **BUG-001 (partially fixed on the v0.1.1 branch; unreleased).** Persian
+  `شراب و قمار` now puts `5:90`, `5:91`, and 2:219 in the top 5 (2:219 at rank
+  3 in both paths), and the false friends 24:31/2:280 stay out. Arabic-script
+  `الخمر والميسر` in the Persian UI also keeps 2:219 at rank 3. Persian
+  `شراب` (2:219 at #9 in-memory, #6 in D1) and English "wine" (2:219 at #7,
+  #4 in D1; the rest of the prohibition cluster is at #12–13) still miss the
+  full top 5: a one-word query has no cross-field coverage to compare, so the
+  reviewed verse→subject layer in v0.2.0 is the remaining fix.
 - **G1 scope classifier held.** Independent holdout Quran recall is 92.5%
   (EN 95.0%, FA 90.0%) against a 97% target, so it is built but not wired. A
   fiqh question can retrieve prayer verses and be answered. This is the largest
@@ -122,13 +132,14 @@ quoted anywhere in this release.
 
 | artifact | version |
 |---|---|
-| Git tag | `v0.1.0` |
-| Package | `0.1.0` (private) |
-| Worker API | `m1-0.1.0` |
+| Git tag (published) | `v0.1.0` |
+| Branch candidate | package `0.1.1`, Worker API `m1-0.1.1` (unreleased) |
+| Package (v0.1.0 tag) | `0.1.0` (private) |
+| Worker API (v0.1.0 tag) | `m1-0.1.0` |
 | Corpus schema | `1.0.0` (`data/build/corpus.json`) |
 
 The D1 schema and seed are generated from `pipeline/build-d1.ts` at this tag;
-they are not committed.
+they are not committed. The v0.1.1 branch does not change the schema or seed.
 
 ## Licensing and attribution
 

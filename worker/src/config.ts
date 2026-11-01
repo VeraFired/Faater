@@ -8,7 +8,7 @@
 
 import { normalize } from '../../pipeline/lib/normalize.ts'
 
-export const VERSION = 'm1-0.1.0'
+export const VERSION = 'm1-0.1.1'
 
 export const LIMITS = {
   minChars: 2,

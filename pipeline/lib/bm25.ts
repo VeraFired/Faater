@@ -32,6 +32,14 @@ export interface FieldIndex {
 export interface RankedDoc {
   doc: number
   score: number
+  /**
+   * Informative query terms this document matched.
+   *
+   * Ranking itself only needs the score, but cross-field coverage needs the
+   * term names: a verse matching two query words must be distinguishable from
+   * one matching a single word. Optional so synthetic fixtures stay terse.
+   */
+  matched?: string[]
 }
 
 const K1 = 1.2
@@ -146,6 +154,16 @@ export interface SearchOptions {
    * a string that appears in no document, so the bonus never fired.
    */
   phrase?: string
+  /**
+   * Multiply the BM25 score by the fraction of query terms a document matched.
+   *
+   * On for literal queries: a verse matching every user term should beat one
+   * matching a single common word. Off for concept expansions: their terms are
+   * ALTERNATIVES ("forgive", "pardon", "overlook"), not a conjunction, so a
+   * verse that uses one synonym is fully relevant. Dividing it by the synonym
+   * count is what kept the forgiveness verses out of the top 50.
+   */
+  coverage?: boolean
 }
 
 /** Weight applied to a frame term's BM25 contribution. */
@@ -160,7 +178,8 @@ export function searchField(
   query: string,
   options: SearchOptions = {},
 ): RankedDoc[] {
-  const { limit = 100, expand, stopwords, frameTerms, phrase: phraseSource } = options
+  const { limit = 100, expand, stopwords, frameTerms, phrase: phraseSource, coverage = true } =
+    options
 
   const words = tokenize(query).filter((t) => !stopwords?.has(t))
   const terms = [...new Set(words.flatMap((t) => (expand ? expand(t) : [t])))]
@@ -181,6 +200,21 @@ export function searchField(
   const isFrame = (t: string) => !!frameTerms?.has(t)
   const coverageTerms = present.filter((t) => !isFrame(t))
 
+  // A frame term's stem must not be mistaken for content. «قرآن» expands to
+  // «قران» and «قرا»; the stem is not in FRAME_TERMS, so a field that contains
+  // only frame-derived terms would otherwise look as if it matched the user's
+  // topic. Keep frame terms out of the coverage denominator exactly as before,
+  // but reject the field when NONE of its present terms came from a non-frame
+  // source word. The patience question still keeps its Arabic evidence; the
+  // «فقرا» question no longer drowns in generic "Quran" verses.
+  const sourceContent = new Set<string>()
+  for (const word of words) {
+    if (isFrame(word)) continue
+    for (const v of expand ? expand(word) : [word]) sourceContent.add(v)
+  }
+  const hasContentWord = words.some((t) => !isFrame(t))
+  if (hasContentWord && !present.some((t) => sourceContent.has(t))) return []
+
   // A query that HAS content words must not be answered by a list made only of
   // frame-term matches. «قرآن درباره ازدواج» contains no Arabic content term at
   // all, so before this guard the ar field matched only «قرآن» and returned
@@ -188,20 +222,24 @@ export function searchField(
   // asked about. Those plausible-looking hits then outvoted the Persian list in
   // RRF. A bare frame query ("القرآن") is still allowed: there the frame term
   // IS the content.
-  if (terms.some((t) => !isFrame(t)) && !coverageTerms.length) return []
+  if (hasContentWord && !coverageTerms.length) return []
 
   // If the query is ONLY a frame term ("Quran"), it still has to count towards
   // coverage, or every document would score zero.
   const coverageSet = coverageTerms.length ? coverageTerms : present
 
   const scores = new Map<number, number>()
-  const matched = new Map<number, number>()
+  const matched = new Map<number, string[]>()
   for (const term of present) {
     const w = isFrame(term) ? FRAME_WEIGHT : 1
     const counts = coverageTerms.length ? !isFrame(term) : true
     for (const [doc, score] of termScores(field, term)) {
       scores.set(doc, (scores.get(doc) ?? 0) + w * score)
-      if (counts) matched.set(doc, (matched.get(doc) ?? 0) + 1)
+      if (counts) {
+        const terms = matched.get(doc)
+        if (terms) terms.push(term)
+        else matched.set(doc, [term])
+      }
     }
   }
 
@@ -213,12 +251,21 @@ export function searchField(
   const phrase = tokenize(phraseText).length > 1 ? tokenize(phraseText).join(' ') : ''
 
   return [...scores.entries()]
+    // A candidate that matched only a frame-derived term is not evidence
+    // about the user's topic. This keeps «فقرا» from returning generic
+    // "Quran" verses while retaining the real Arabic patience evidence.
+    .filter(([doc]) => {
+      if (!hasContentWord) return true
+      return (matched.get(doc) ?? []).some((t) => sourceContent.has(t))
+    })
     .map(([doc, score]) => {
       // Pure BM25 has no coverage term, so for a multi-word query a one-word
       // verse matching one word can outrank a document matching every word.
-      const coverage = (matched.get(doc) ?? 0) / coverageSet.length
+      // Concept lists opt out: their terms are alternatives, not a conjunction.
+      const terms = matched.get(doc) ?? []
+      const coverageFactor = coverage ? terms.length / coverageSet.length : 1
       const bonus = phrase && field.texts[doc]?.includes(phrase) ? 2 : 1
-      return { doc, score: score * coverage * bonus }
+      return { doc, score: score * coverageFactor * bonus, matched: terms }
     })
     .sort((a, b) => b.score - a.score || a.doc - b.doc)
     .slice(0, limit)

@@ -42,12 +42,22 @@ export function arabicStem(token: string): string {
   let stem = token
   let changed = false
 
+  // «والدين» is "parents", not «و + الدين»: the conjunction analysis is right
+  // for «والميسر» and wrong for this word family, and the stem it produced
+  // («دين», religion) flooded parents queries with religion verses.
+  const lexicalWaw = token.startsWith('والد')
+
+  // Longest prefix first, and stop at the first MATCHING prefix. Falling
+  // through to the bare «و» is how «والدين» kept producing «دين» even when
+  // the conjunction form was rejected.
   for (const p of PREFIXES) {
-    if (stem.length - p.length >= MIN_STEM && stem.startsWith(p)) {
-      stem = stem.slice(p.length)
+    if (!stem.startsWith(p)) continue
+    const remainder = stem.slice(p.length)
+    if (!lexicalWaw && remainder.length >= MIN_STEM) {
+      stem = remainder
       changed = true
-      break
     }
+    break
   }
 
   for (const s of SUFFIXES) {
@@ -68,6 +78,86 @@ export function arabicStem(token: string): string {
 export function arabicVariants(token: string): string[] {
   const stem = arabicStem(token)
   return stem === token ? [token] : [token, stem]
+}
+
+/**
+ * Persian light stemming for the Persian field.
+ *
+ * The Arabic stemmer was doing double duty here and it mangles Persian:
+ * «فقرا» loses its first letter as an Arabic prefix and becomes «قرا»;
+ * «بخشش» becomes «خشش»; «بهشت» becomes «هشت». Those artifacts put
+ * unrelated verses into the Persian list. The rules below are limited to
+ * Persian noun plurals and the «می» verb prefix; they ADD variants, so an
+ * exact match can never be lost.
+ *
+ * Persian plurals attach after a ZWNJ or directly («فرشتگان», «همسران»).
+ * The joined query form already exists; this makes its stem meet the
+ * singular in the index.
+ */
+export function persianVariants(token: string): string[] {
+  if (!/[پچژگکی]/.test(token) && !/[؀-ۿ]/.test(token)) return [token]
+  const out = new Set<string>([token])
+  const add = (s: string) => {
+    if (s.length >= 2) out.add(s)
+  }
+
+  // «فرشتگان» -> «فرشته» / «فرشتگ»; «پرندگان» -> «پرنده».
+  if (token.endsWith('گان') && token.length >= 4) {
+    const base = token.slice(0, -3)
+    add(base + 'ه')
+    add(base)
+  }
+
+  // «میوه‌های» joins to «ميوههاي»; the plural suffix is not the word.
+  if (token.endsWith('هاي') && token.length >= 5) {
+    add(token.slice(0, -3))
+  } else if (token.endsWith('ها') && token.length >= 4) {
+    add(token.slice(0, -2))
+  }
+
+  // Sound plurals. Length floors keep «زمان» from becoming «زم» while
+  // allowing «همسران» -> «همسر» and «مومنان» -> «مومن».
+  for (const suffix of ['ان', 'ات', 'ين', 'ون']) {
+    if (token.endsWith(suffix) && token.length - suffix.length >= 4) {
+      add(token.slice(0, -suffix.length))
+    }
+  }
+
+  // «راستگويي» -> «راستگو»; the doubled yeh is the abstract-noun suffix.
+  if (token.endsWith('گويي') && token.length >= 5) {
+    add(token.slice(0, -2))
+  }
+
+  // Joined present-tense verbs: «ميگويد» -> «گويد». Only the two productive
+  // prefixes; a bare «ب» would eat the first letter of «بخشش» again.
+  for (const prefix of ['نمي', 'مي']) {
+    if (token.startsWith(prefix) && token.length - prefix.length >= 3) {
+      add(token.slice(prefix.length))
+      break
+    }
+  }
+
+  // Arabic loanwords keep their article/conjunction glued on. The Persian
+  // translation of 53:24 says «ميسر است», so an Arabic-script query
+  // «والميسر» has to reach «ميسر»; without this the Persian list misses and
+  // 2:280 (ميسرة, "deferment") wins by default. Only multi-letter prefixes:
+  // stripping bare «ب» is what turned «بخشش» into «خشش».
+  //
+  // The conjunction forms need a four-letter remainder. «والدین» (parents) is
+  // an ordinary Persian word, not «و + الدین»: stripping the «وال» there left
+  // «دین» (religion) in the query and answered every parents question with
+  // religion verses. The bare article «ال» is unambiguous enough to keep a
+  // three-letter remainder, which «الخمر» → «خمر» needs.
+  for (const prefix of ['وال', 'بال', 'كال', 'فال', 'ال']) {
+    const remainder = token.slice(prefix.length)
+    const floor = prefix === 'ال' ? 3 : 4
+    if (token.startsWith(prefix) && remainder.length >= floor) {
+      add(remainder)
+      break
+    }
+  }
+
+  return [...out]
 }
 
 /**

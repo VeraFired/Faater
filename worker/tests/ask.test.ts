@@ -174,3 +174,28 @@ test('translation cards carry the publisher version required by the licence', as
   assert.equal(en?.version, '1.1.2')
   assert.equal(en?.publisher, 'Issued by Noor International Center.')
 })
+
+test('Persian wine-and-gambling returns 2:219 and the prohibition cluster', async () => {
+  const res = await ask(db, { q: 'شراب و قمار' }, 't21')
+  assert.equal(res.lang, 'fa')
+  assert.equal(res.status, 'answered')
+  const refs = res.verses.map((v) => v.ref)
+  for (const ref of ['2:219', '5:90', '5:91']) {
+    assert.ok(refs.includes(ref), `${ref} missing; got ${refs.join(', ')}`)
+  }
+  // The false friends must not reach the five-card answer.
+  assert.ok(!refs.includes('24:31'), `24:31 (veils) leaked in: ${refs.join(', ')}`)
+  assert.ok(!refs.includes('2:280'), `2:280 (deferment) leaked in: ${refs.join(', ')}`)
+})
+
+test('an Arabic-script question in the Persian UI still reaches 2:219', async () => {
+  // detectLang() treats Arabic script as Persian UI language. The Arabic list
+  // must keep full weight here because the Persian field covers only «ميسر».
+  const res = await ask(db, { q: 'الخمر والميسر' }, 't22')
+  assert.equal(res.lang, 'fa')
+  assert.equal(res.status, 'answered')
+  assert.ok(
+    res.verses.some((v) => v.ref === '2:219'),
+    `2:219 missing; got ${res.verses.map((v) => v.ref).join(', ')}`,
+  )
+})

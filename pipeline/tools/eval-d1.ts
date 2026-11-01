@@ -10,11 +10,11 @@
  */
 
 import { readFile } from 'node:fs/promises'
-import { DatabaseSync } from 'node:sqlite'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { searchD1, type D1Database, type D1Prepared, type Lexicon, type SurahMeta } from '../../worker/src/retrieve.ts'
+import { searchD1 } from '../../worker/src/retrieve.ts'
+import { openLocalD1 } from './local-d1.ts'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const setPath =
@@ -32,46 +32,14 @@ type EvalSet = { items: EvalItem[] }
 
 const set: EvalSet = JSON.parse(await readFile(setPath, 'utf8'))
 
-const sqlite = new DatabaseSync(':memory:')
-sqlite.exec(await readFile(join(ROOT, 'data', 'build', 'd1', 'schema.sql'), 'utf8'))
-sqlite.exec(await readFile(join(ROOT, 'data', 'build', 'd1', 'seed.sql'), 'utf8'))
-
-const plain = <T>(row: unknown): T => ({ ...(row as object) }) as T
-
-const db: D1Database = {
-  prepare(sql: string): D1Prepared {
-    const stmt = sqlite.prepare(sql)
-    let params: unknown[] = []
-    const prepared: D1Prepared = {
-      bind(...values: unknown[]) {
-        params = values
-        return prepared
-      },
-      async all<T = Record<string, unknown>>() {
-        return { results: stmt.all(...(params as never[])).map((r) => plain<T>(r)) }
-      },
-      async first<T = Record<string, unknown>>() {
-        const row = stmt.get(...(params as never[]))
-        return row ? plain<T>(row) : null
-      },
-    }
-    return prepared
-  },
-}
-
-const metaRows = sqlite
-  .prepare("SELECT key, value FROM meta WHERE key IN ('lexicon', 'surahs')")
-  .all() as Array<{ key: string; value: string }>
-const meta = Object.fromEntries(metaRows.map((r) => [r.key, r.value]))
-const lexicon = JSON.parse(meta.lexicon) as Lexicon
-const surahs = JSON.parse(meta.surahs) as SurahMeta[]
+const { db, lexicon, surahs } = await openLocalD1()
 
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`
 const now = performance.now()
 
 const rows: Array<{ item: EvalItem; refs: string[]; firstGold: number | null }> = []
 for (const item of set.items) {
-  const hits = await searchD1(db, lexicon, surahs, item.q, { limit: 50 })
+  const hits = await searchD1(db, lexicon, surahs, item.q, { limit: 50, language: item.lang })
   const refs = hits.map((h) => h.ref)
   const firstGold = item.expect_refs?.length
     ? (() => {

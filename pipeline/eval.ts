@@ -248,7 +248,7 @@ export interface ItemResult extends Signals {
 
 export function runEval(items: EvalItem[], retriever: Retriever, k = 5, budget = 0.05) {
   const results: ItemResult[] = items.map((item) => {
-    const hits = retriever.search(item.q, { limit: 50 })
+    const hits = retriever.search(item.q, { limit: 50, language: item.lang })
     const s = signalsOf(hits)
     let firstGoldRank: number | null = null
     if (item.expect_refs?.length) {

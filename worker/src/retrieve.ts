@@ -21,7 +21,7 @@ import { tokenize } from '../../pipeline/lib/bm25.ts'
 import { resolveFinglish, isLatinScript } from '../../pipeline/lib/finglish.ts'
 import { normalize, normalizeJoined } from '../../pipeline/lib/normalize.ts'
 import { parseReference, type SurahRef } from '../../pipeline/lib/reference.ts'
-import { arabicVariants, englishVariants } from '../../pipeline/lib/stem.ts'
+import { arabicVariants, englishVariants, persianVariants } from '../../pipeline/lib/stem.ts'
 import {
   ENGLISH_MARKERS,
   FRAME_TERMS,
@@ -29,6 +29,8 @@ import {
   STOPWORDS_FA,
   foldEnglish,
 } from '../../pipeline/lib/stopwords.ts'
+import { arWeightFor, FA_QUERY_AR_WEIGHT } from '../../pipeline/lib/query.ts'
+import { buildCoveragePlan, coverageOf } from '../../pipeline/lib/query-plan.ts'
 
 // ---------------------------------------------------------------------------
 // D1 surface (the subset this module uses)
@@ -49,6 +51,8 @@ export interface ConceptSynonyms {
   fa: string[]
   faJoined: string[]
   ar: string[]
+  /** Verses that share a spelling but not the sense; never returned by this concept. */
+  excludes?: string[]
 }
 
 export interface ConceptEntry {
@@ -110,7 +114,24 @@ export interface Hit {
 export interface SearchOptions {
   limit?: number
   conceptExpansion?: boolean
+  /**
+   * RRF weight of a concept list. 0.5 mirrors the in-memory retriever: a
+   * concept rank-1 verse ties a literal rank-2 verse, so the bridge can
+   * promote without outvoting an exact user term.
+   */
   conceptWeight?: number
+  /** Request language, when known. Drives the Arabic-list weight (BUG-001). */
+  language?: 'en' | 'fa'
+  /** Cross-field query-term coverage rerank. Default on. */
+  coverageRerank?: boolean
+  /**
+   * Bounded full-coverage multiplier: score *= 1 + alpha when a document
+   * matches every eligible query group. Default 1.0 (2x). Partial coverage
+   * gets no boost.
+   */
+  coverageAlpha?: number
+  /** Arabic literal list weight for a Persian request. Default 0.3. */
+  faQueryArWeight?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -149,18 +170,40 @@ const FIELDS = {
     match: '{fa faj}',
     idx: "v.fa_idx || ' ' || v.faj_idx",
     raw: "v.fa_search || ' ' || v.fa_search_joined",
-    expand: arabicVariants,
+    expand: persianVariants,
     stopwords: STOPWORDS_FA,
   },
 } satisfies Record<string, Field>
 
 type FieldName = keyof typeof FIELDS
 
+/** Same list as pipeline/lib/retrieve.ts. Concept expansion only. */
+const GENERIC_CONCEPTS: ReadonlySet<string> = new Set([
+  'god',
+  'quran',
+  'human',
+  'people',
+  'man',
+  'woman',
+  'earth',
+  'sky',
+  'life',
+  'book',
+  'verse',
+  'surah',
+  'revelation',
+  'prophet',
+  'prophets',
+  'religion',
+])
+
 const quoteFts = (t: string): string => `"${t.replace(/"/g, '""')}"`
 
 interface Ranked {
   ref: string
   score: number
+  /** Informative query terms this verse matched; used by coverage. */
+  matched: string[]
 }
 
 async function searchField(
@@ -169,6 +212,7 @@ async function searchField(
   query: string,
   limit = 100,
   phraseOverride?: string,
+  coverageEnabled = true,
 ): Promise<Ranked[]> {
   const field = FIELDS[name]
   const words = tokenize(query).filter((t) => !field.stopwords.has(t))
@@ -180,6 +224,20 @@ async function searchField(
   const isFrame = (t: string) => FRAME_TERMS.has(t)
   const content = terms.filter((t) => !isFrame(t))
   if (terms.some((t) => !isFrame(t)) && !content.length) return []
+
+  // A frame term's stem must not be mistaken for content. «قرآن» expands to
+  // «قرا», which is not in FRAME_TERMS; without this set a Persian question
+  // whose content word is absent from the Arabic index still returns verses
+  // that merely mention the Book. Rows must match at least one term derived
+  // from a non-frame source word.
+  const sourceContent = new Set<string>()
+  const hasContentWord = words.some((t) => !isFrame(t))
+  if (hasContentWord) {
+    for (const word of words) {
+      if (isFrame(word)) continue
+      for (const v of field.expand(word)) sourceContent.add(v)
+    }
+  }
 
   const matchTerms = content.length ? content : terms
   const coverageTerms = content.length ? content : terms
@@ -197,17 +255,46 @@ async function searchField(
     .bind(match, limit)
     .all<{ ref: string; rank: number; idx: string; raw: string }>()
 
+  // A row that matched only a frame-derived term is not evidence about the
+  // user's topic. This mirrors the in-memory `sourceContent` guard.
+  const candidates = hasContentWord
+    ? rows.results.filter((row) => {
+        const tokens = new Set(row.idx.split(/\s+/).filter(Boolean))
+        for (const term of sourceContent) if (tokens.has(term)) return true
+        return false
+      })
+    : rows.results
+  if (!candidates.length) return []
+
   const phraseSource = phraseOverride ?? query
   const phraseWords = tokenize(phraseSource)
   const phrase = phraseWords.length > 1 ? phraseWords.join(' ') : ''
 
-  return rows.results
+  // Only terms that exist somewhere in this field's candidate rows can be
+  // covered. The in-memory `searchField` computes coverage over `present`
+  // terms (the ones the field index actually contains); using every expanded
+  // query term here would divide by variants that cannot match anything, so
+  // the same query could rank differently on D1 than in memory.
+  const observed = new Set<string>()
+  for (const row of candidates) {
+    for (const token of row.idx.split(/\s+/)) {
+      if (token) observed.add(token)
+    }
+  }
+  const effectiveCoverageTerms = coverageTerms.filter((t) => observed.has(t))
+
+  return candidates
     .map((row) => {
       const tokens = new Set(row.idx.split(/\s+/).filter(Boolean))
-      const matched = coverageTerms.filter((t) => tokens.has(t)).length
-      const coverage = matched / coverageTerms.length
+      const matched = effectiveCoverageTerms.filter((t) => tokens.has(t))
+      const coverage = effectiveCoverageTerms.length
+        ? matched.length / effectiveCoverageTerms.length
+        : 0
+      // Concept terms are alternatives, not a conjunction; literal terms are
+      // not. See the same switch in pipeline/lib/bm25.ts.
+      const coverageFactor = coverageEnabled ? coverage : 1
       const bonus = phrase && row.raw.includes(phrase) ? 2 : 1
-      return { ref: row.ref, score: -row.rank * coverage * bonus }
+      return { ref: row.ref, score: -row.rank * coverageFactor * bonus, matched }
     })
     // FTS5 returns raw bm25 order. Coverage and the phrase bonus are part of
     // our score, so sort by that score before RRF consumes list positions —
@@ -246,10 +333,14 @@ export function fieldQueries(query: string, lexicon: Lexicon): QueryParts {
 }
 
 function matchConcepts(query: string, lexicon: Lexicon, maxConcepts = 2): ConceptEntry[] {
-  const enTokens = new Set(tokenize(normalize(foldEnglish(query))))
+  // Same inflection expansion as the in-memory trigger matcher: "tested"
+  // must reach the `trial` concept whose trigger is "test".
+  const enTokens = new Set(
+    tokenize(normalize(foldEnglish(query))).flatMap((t) => englishVariants(t)),
+  )
   const faTokenSets = [
-    new Set(tokenize(normalize(query))),
-    new Set(tokenize(normalizeJoined(query))),
+    new Set(tokenize(normalize(query)).flatMap((t) => persianVariants(t))),
+    new Set(tokenize(normalizeJoined(query)).flatMap((t) => persianVariants(t))),
   ]
   const containsAll = (haystack: Set<string>, needle: string[]): boolean =>
     needle.length > 0 && needle.every((t) => haystack.has(t))
@@ -287,7 +378,11 @@ function matchConcepts(query: string, lexicon: Lexicon, maxConcepts = 2): Concep
     if (best > 0) scored.push({ concept, specificity: best })
   }
 
-  return scored
+  // Prefer a real topic over a question-frame concept; see the in-memory
+  // retriever for the same rule. D1 has no df oracle here, so the only signal
+  // is the generic list; that is enough to keep «human» from outvoting «insult».
+  const specific = scored.filter((s) => !GENERIC_CONCEPTS.has(s.concept.id))
+  return (specific.length ? specific : scored)
     .sort((a, b) => b.specificity - a.specificity)
     .slice(0, maxConcepts)
     .map((s) => s.concept)
@@ -344,7 +439,10 @@ export async function searchD1(
 ): Promise<Hit[]> {
   const limit = options.limit ?? 20
   const conceptExpansion = options.conceptExpansion ?? true
-  const conceptWeight = options.conceptWeight ?? 0.1
+  const conceptWeight = options.conceptWeight ?? 0.5
+  const coverageRerank = options.coverageRerank ?? true
+  const coverageAlpha = options.coverageAlpha ?? 1
+  const faQueryArWeight = options.faQueryArWeight ?? FA_QUERY_AR_WEIGHT
 
   if (normalize(rawQuery) === BASMALA_KEY) {
     return [{ ref: '1:1', score: 1, fields: ['phrase'] }]
@@ -390,18 +488,89 @@ export async function searchD1(
   }
 
   const lists: NamedList[] = [...literal]
+  const plan = buildCoveragePlan(rawQuery)
+  const matchedAcrossCandidates = new Set<string>()
+  const matchedByRef = new Map<string, Set<string>>()
+  // Term coverage of the Persian list alone, for the Arabic weight gate.
+  const faMatched = new Set<string>()
+
+  for (const list of literal) {
+    for (const ranked of list.ranked) {
+      if (!ranked.matched.length) continue
+      let refTerms = matchedByRef.get(ranked.ref)
+      if (!refTerms) {
+        refTerms = new Set<string>()
+        matchedByRef.set(ranked.ref, refTerms)
+      }
+      for (const term of ranked.matched) {
+        refTerms.add(term)
+        matchedAcrossCandidates.add(term)
+        if (list.name === 'fa') faMatched.add(term)
+      }
+    }
+  }
+
+  const eligible = plan.groups.filter((g) =>
+    g.variants.some((v) => matchedAcrossCandidates.has(v)),
+  ).length
+  const faCoveredGroups = plan.groups.filter((g) =>
+    g.variants.some((v) => faMatched.has(v)),
+  ).length
+
+  // BUG-001: a Persian request also searches the Arabic field with the same
+  // raw tokens. «شراب» in Arabic names Paradise wine; 2:219 uses «الخمر».
+  // When the Persian field covers the question's terms, the Arabic literal list
+  // is a fallback rather than a peer. The weight is swept in ablate-fusion.ts.
+  const faLiteral = literal.find((l) => l.name === 'fa')
+  const arLiteral = literal.find((l) => l.name === 'ar')
+  if (arLiteral) {
+    arLiteral.weight = arWeightFor(
+      options.language,
+      !!faLiteral?.ranked.length,
+      faCoveredGroups,
+      faQueryArWeight,
+    )
+  }
   if (conceptExpansion) {
     const concepts = matchConcepts(rawQuery, lexicon)
     if (concepts.length) {
       const cq = conceptQueries(concepts)
+      const excluded = new Set(concepts.flatMap((c) => c.synonyms?.excludes ?? []))
       for (const name of ['ar', 'en', 'fa'] as const) {
         if (!tokenize(cq[name]).length) continue
-        const ranked = await searchField(db, name, cq[name], 20)
+        const ranked = (
+          await searchField(db, name, cq[name], 20, undefined, false)
+        ).filter((h) => !excluded.has(h.ref))
         if (ranked.length) lists.push({ name: `concept:${name}`, ranked, weight: conceptWeight })
       }
     }
   }
 
   if (!lists.length) return []
-  return fuse(lists).slice(0, limit)
+
+  const hits = fuse(lists)
+
+  // BUG-001: reward a verse that covers the WHOLE question across the literal
+  // fields. 2:219 matches both «شراب» and «قمار» in the Persian translation;
+  // a Paradise verse matches only «شراب». Partial overlap is not enough:
+  // common question words would otherwise lift an unrelated verse. The boost
+  // is bounded, applies only to candidates literal retrieval already found, and
+  // never counts concept lists. It is a no-op unless at least two query groups
+  // matched.
+  if (coverageRerank && eligible >= 2) {
+    for (const hit of hits) {
+      const refTerms = matchedByRef.get(hit.ref)
+      if (!refTerms) continue
+      const coverage = coverageOf(plan, matchedAcrossCandidates, refTerms)
+      if (coverage.eligible >= 2 && coverage.covered === coverage.eligible) {
+        hit.score *= 1 + coverageAlpha
+      }
+    }
+    hits.sort(
+      (a, b) =>
+        b.score - a.score || a.ref.localeCompare(b.ref, 'en', { numeric: true }),
+    )
+  }
+
+  return hits.slice(0, limit)
 }

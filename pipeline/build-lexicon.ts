@@ -39,6 +39,7 @@ interface CorpusSurah {
 async function main(): Promise<void> {
   const corpus = JSON.parse(await readFile(join(BUILD, 'corpus.json'), 'utf8')) as {
     surahs: CorpusSurah[]
+    verses: Array<{ ref: string }>
   }
   const faFile = JSON.parse(await readFile(join(LEX, 'surahs.fa.json'), 'utf8')) as {
     _note: string
@@ -58,7 +59,13 @@ async function main(): Promise<void> {
     ? (JSON.parse(synonymsRaw) as {
         _note: string
         _review: string
-        concepts: Array<{ id: string; en: string[]; fa: string[]; ar: string[] }>
+        concepts: Array<{
+          id: string
+          en: string[]
+          fa: string[]
+          ar: string[]
+          excludes?: string[]
+        }>
       })
     : null
 
@@ -133,9 +140,10 @@ async function main(): Promise<void> {
   // an expansion can never fail to meet its own document. Nothing here is
   // displayed; a wrong term costs recall, never a visible claim.
   const conceptIds = new Set(finglish.concepts.map((c) => c.id))
+  const corpusRefs = new Set(corpus.verses.map((v) => v.ref))
   const synonymsById = new Map<
     string,
-    { en: string[]; fa: string[]; faJoined: string[]; ar: string[] }
+    { en: string[]; fa: string[]; faJoined: string[]; ar: string[]; excludes: string[] }
   >()
   if (synonymsFile) {
     for (const entry of synonymsFile.concepts) {
@@ -145,11 +153,20 @@ async function main(): Promise<void> {
       if (synonymsById.has(entry.id)) fail(`duplicate synonyms for concept: ${entry.id}`)
       const clean = (terms: string[]) => [...new Set(terms.map((t) => t.trim()).filter(Boolean))]
       const faTerms = clean(entry.fa)
+      // A concept can name a verse that shares its spelling but not its sense:
+      // «خُمُر» in 24:31 is a veil, not wine; «ميسرة» in 2:280 is deferment,
+      // not gambling. Search-only exclusions; nothing here is displayed.
+      const excludes = clean(entry.excludes ?? [])
+      for (const ref of excludes) {
+        if (!/^\d+:\d+$/.test(ref)) fail(`concept ${entry.id} has malformed exclude: ${ref}`)
+        if (!corpusRefs.has(ref)) fail(`concept ${entry.id} excludes missing verse: ${ref}`)
+      }
       const s = {
         en: [...new Set(clean(entry.en).map((t) => normalize(foldEnglish(t))))].filter(Boolean),
         fa: [...new Set(faTerms.map((t) => normalize(t)))].filter(Boolean),
         faJoined: [...new Set(faTerms.map((t) => normalizeJoined(t)))].filter(Boolean),
         ar: [...new Set(clean(entry.ar).map((t) => normalize(t)))].filter(Boolean),
+        excludes,
       }
       if (!s.en.length && !s.fa.length && !s.ar.length) {
         fail(`concept ${entry.id} has no usable synonym in any language`)

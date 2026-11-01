@@ -70,6 +70,15 @@ const el = (tag, attrs = {}, children = []) => {
   return node
 }
 
+/**
+ * Persian typography uses Persian-Indic digits. This is display only: the
+ * href, element ids and anchor targets keep the canonical Latin reference, so
+ * links and footnotes still resolve.
+ */
+const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹'
+const displayNumber = (value) =>
+  lang === 'fa' ? String(value).replace(/\d/g, (d) => FA_DIGITS[Number(d)]) : String(value)
+
 let lang = 'en'
 try {
   const saved = localStorage.getItem('faater-lang')
@@ -140,7 +149,7 @@ function verseCard(verse) {
       href: verse.links.quran_com,
       target: '_blank',
       rel: 'noopener noreferrer',
-      text: verse.ref,
+      text: displayNumber(verse.ref),
     }),
     el('span', { class: 'verse-surah', text: `${t('surah')} ${surahName}` }),
   ])

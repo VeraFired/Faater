@@ -10,7 +10,7 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
 
-import { rrf, type RankedDoc } from '../lib/bm25.ts'
+import { buildField, rrf, searchField, type RankedDoc } from '../lib/bm25.ts'
 import { Retriever, type RetrieverData } from '../lib/retrieve.ts'
 
 const doc = (d: number): RankedDoc => ({ doc: d, score: 0 })
@@ -32,6 +32,24 @@ test('rrf weight scales a list without reordering it', () => {
 test('a zero weight contributes nothing at all', () => {
   const fused = rrf([[doc(1)], [doc(2)]], 60, [1, 0])
   assert.deepEqual(fused.map((r) => r.doc), [1])
+})
+
+test('searchField reports which informative terms each document matched', () => {
+  // Cross-field coverage needs names, not just a count: "matched 2 terms" on
+  // different terms is not the same evidence as "matched both query terms".
+  const field = buildField('en', [
+    'alpha beta',
+    'alpha alpha alpha',
+    'gamma delta',
+    'epsilon zeta',
+    'eta theta',
+  ])
+  const ranked = searchField(field, 'alpha beta')
+  const both = ranked.find((r) => r.doc === 0)
+  const alphaOnly = ranked.find((r) => r.doc === 1)
+  assert.ok(both && alphaOnly)
+  assert.deepEqual(new Set(both.matched), new Set(['alpha', 'beta']))
+  assert.deepEqual(alphaOnly.matched, ['alpha'])
 })
 
 // ---------------------------------------------------------------------------

@@ -211,9 +211,12 @@ test('a query with content words is not answered by frame-term hits alone', asyn
   ) as { verses: Record<string, { searchText: string }> }
   for (const hit of hits) {
     const text = fa.verses[hit.ref]?.searchText ?? ''
+    // The concept layer is allowed to bridge from «ازدواج» to the translation's
+    // «زوج» (53:45 names the two mates, not the noun "marriage"). What must not
+    // happen is a hit whose only shared word with the question is «قرآن».
     assert.ok(
-      text.includes('ازدواج'),
-      `${hit.ref} ranked for marriage but its Persian text does not mention it: ${text.slice(0, 80)}`,
+      text.includes('ازدواج') || text.includes('زوج') || text.includes('همسر'),
+      `${hit.ref} ranked for marriage but its Persian text mentions neither marriage nor a spouse: ${text.slice(0, 80)}`,
     )
   }
 })
@@ -265,4 +268,64 @@ test('concept synonyms retrieve a verse the query wording never reaches', () => 
   assert.ok(refs.includes('1:3'), `expected the "spend wealth" verse, got ${refs.join(', ')}`)
   assert.ok(refs.includes('1:1'), `expected the Arabic «صدقه» verse via the concept bridge, got ${refs.join(', ')}`)
   assert.ok(!refs.includes('1:2'), `patience must not be pulled in, got ${refs.join(', ')}`)
+})
+
+test('a concept can exclude a verse that shares its spelling but not its sense', () => {
+  // «خُمُر» in 24:31 is "veils", not wine; «ميسرة» in 2:280 is "deferment",
+  // not gambling. Concept expansion must not import those false friends.
+  const empty = { segments: [], footnotes: [], searchText: '', searchTextJoined: '' }
+  const data: RetrieverData = {
+    verses: [
+      { ref: '1:1', surah: 1, ayah: 1, arabic: 'خمر', arabicNorm: 'خمر', bodyNorm: 'خمر', basmala: null },
+      { ref: '1:2', surah: 1, ayah: 2, arabic: 'خمر', arabicNorm: 'خمر', bodyNorm: 'خمر', basmala: null },
+      { ref: '1:3', surah: 1, ayah: 3, arabic: 'صبر', arabicNorm: 'صبر', bodyNorm: 'صبر', basmala: null },
+      { ref: '1:4', surah: 1, ayah: 4, arabic: 'عدل', arabicNorm: 'عدل', bodyNorm: 'عدل', basmala: null },
+    ],
+    basmala: { text: 'بسم الله الرحمن الرحيم', norm: 'بسم الله الرحمن الرحيم', ref: '1:0' },
+    surahs: [
+      { index: 1, ayahs: 4, nameAr: 'الفاتحة', nameEn: 'Al-Fatihah', nameTranslit: 'Al-Faatiha', nameFa: 'فاتحه', nameFaAlt: null },
+    ],
+    en: {
+      '1:1': { ...empty, searchText: 'wine is forbidden', searchTextJoined: 'wine is forbidden' },
+      '1:2': { ...empty, searchText: 'wine in the gardens', searchTextJoined: 'wine in the gardens' },
+      '1:3': { ...empty, searchText: 'patience and prayer', searchTextJoined: 'patience and prayer' },
+      '1:4': { ...empty, searchText: 'justice for the orphan', searchTextJoined: 'justice for the orphan' },
+    },
+    fa: {},
+    lexicon: {
+      concepts: [
+        {
+          id: 'alcohol',
+          fa: 'شراب',
+          en: 'alcohol',
+          keys: ['sharab'],
+          synonyms: { en: ['wine'], fa: ['شراب'], faJoined: ['شراب'], ar: ['خمر'], excludes: ['1:2'] },
+        },
+      ],
+      names: [],
+      surahAliases: [],
+    },
+  }
+
+  const hits = new Retriever(data).search('alcohol')
+  const refs = hits.map((h) => h.ref)
+  assert.ok(refs.includes('1:1'), `expected the prohibition verse, got ${refs.join(', ')}`)
+  assert.ok(!refs.includes('1:2'), `the excluded false friend must not appear, got ${refs.join(', ')}`)
+})
+
+test('concept expansion reaches the canonical verse for common Persian topics', async () => {
+  // Each of these was a "related keyword" miss before the concept layer. They
+  // assert top-5 membership on the real corpus, not exact rank: the layer is a
+  // bridge, and the literal lists may legitimately lead.
+  const retriever = new Retriever(await loadRetrieverData())
+  const cases: Array<[string, string]> = [
+    ['غیبت', '49:12'], // backbiting
+    ['ربا', '3:130'], // usury
+    ['همسایه', '4:36'], // neighbours
+    ['یاد خدا', '13:28'], // remembrance of God
+  ]
+  for (const [q, gold] of cases) {
+    const refs = retriever.search(q, { limit: 5, language: 'fa' }).map((h) => h.ref)
+    assert.ok(refs.includes(gold), `${q} should reach ${gold}, got ${refs.join(', ')}`)
+  }
 })

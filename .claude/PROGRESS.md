@@ -708,3 +708,171 @@ not a public launch. See the deployment entry above.
 **Learned** ...
 **Next action** ...
 ```
+
+---
+
+## 2026-10-31 — v0.1.1 BUG-001 candidate (branch `fix/bug-001-v0.1.1`)
+
+**Done**
+- Added D (cross-field query-term coverage) and A (language-aware Arabic
+  weight, 0.6) to both retrievers; shared `pipeline/lib/query-plan.ts` and
+  `pipeline/lib/query.ts`.
+- Added `eval/issues/bug-001.json`, `pipeline/tools/eval-issues.ts`,
+  `pipeline/tools/ablate-fusion.ts`, and `pipeline/tools/local-d1.ts`.
+- Added query-plan, bm25 matched-term, real-corpus, D1, and ask tests:
+  **188/188 pass**.
+- Regenerated the pilot report: in-memory hit@5 **30.3%**, direct **36.0%**,
+  paraphrase 12.5%, MRR 0.236; D1 30.3% / 34.0% / 18.8%, MRR 0.240.
+- Issue eval `--phase v0.1.1`: **4/4 in both paths**; Persian `شراب و قمار`
+  top 5 is 5:90, 5:91, 2:219 in memory (D1 swaps the first two); 24:31 and
+  2:280 absent.
+- Page title changed to `Faater | Quran QA`.
+
+**Broke**
+- Nothing failed in tests or the pilot guard. Noted collateral: `fa-a01`
+  (Persian sentence about patience) gold rank 18 → 36; it was not a top-5 hit
+  in either version. The weight sweep showed 0.6 as the least-damaging point
+  on the gain plateau.
+- Blind set not run; the retrieval change invalidates it for any future
+  certification claim.
+
+**Learned**
+- D alone moves 2:219 from rank 7 to 4; A+D to 3. A alone moves it to 6.
+- The plan's 0.3 Arabic weight caused more collateral recall loss than 0.6;
+  the measured sweep changed the default to 0.6.
+- `runEval` now passes `language`, so post-v0.1.1 pilot numbers include A;
+  compare them with earlier rows knowing that.
+
+**Next action**
+- Owner review. Commit on the branch only; no merge/tag/deploy without the
+  owner's instruction. v0.2.0 reviewed subject layer for fa `شراب` and en
+  "wine".
+---
+
+## 2026-10-31 — v0.1.1 hardening after adversarial review (branch `fix/bug-001-v0.1.1`)
+
+**Done**
+- Replaced fractional coverage (D) with **full-question coverage**: the bonus
+  applies only when a candidate matches every eligible query group. The
+  fractional version promoted unrelated 2:219 to rank 1 for «درباره نحوه سخن
+  گفتن با مردم راهنمایی وجود دارد؟» because the question shares «مردم»،
+  «وجود» and «دارد». A candidate-pool IDF variant was tested and failed the
+  pilot guard (D arm 27.3% / 32.0% vs concept baseline 28.8% / 34.0%).
+- Gated the Arabic weight (A) on the Persian literal list covering **at least
+  two** query groups, and returned the weight to the pre-registered **0.3**.
+  This fixes an Arabic-script recall regression: «الخمر والميسر» typed in the
+  Persian UI had 2:219 below the top 5 under the ungated weight; it is now #3
+  in both paths. The patience sentence's 2:153 is back at rank 18 (was 36 at
+  weight 0.6).
+- Wired punctuation-aware query splitting (`wine/gambling`, `wine-gambling`)
+  and filtered stop/frame variants after stemming (`Quran's` → no `quran`
+  group; `what's`; `beings`/`being`).
+- Added issue items `control-fa-patience-sentence` and
+  `bug001-arabic-script-fa-ui`; `eval-issues` supports `parity: false` for
+  path-divergent controls. v0.1.1 issue set is now **6/6** in both paths.
+- Fixed `ablate.ts` to pin A/D off in both arms; concept ablation passes
+  again (28.8/36.0/6.3 vs 28.8/34.0/12.5).
+- Final pilot: in-memory hit@5 28.8%, direct 34.0%, paraphrase 12.5%, MRR
+  **0.228**; D1 30.3% / 34.0% / 18.8%, MRR **0.240** (16.4 ms/item).
+- Tests: **196/196 pass**. Report regenerated. Blind set unchanged and not run.
+
+**Broke**
+- The first fractional D implementation was a real regression in quality even
+  though it fixed the reported query; it was rejected and replaced. Recorded
+  in `docs/eval-methodology.md` §10 rather than hidden.
+- `eval-issues` rank-parity is not meaningful for long Persian sentences
+  (memory #18 vs D1 #10 for 2:153); the new control sets `parity: false`.
+- The ungated A at 0.3 caused the Arabic-script regression above; the gate is
+  load-bearing and is covered by both-path tests.
+
+**Learned**
+- Coverage must be all-or-nothing or it rewards common-word coincidence.
+  Partial coverage is not a weak signal; on this corpus it is often an
+  unrelated-verse signal.
+- Request language alone is insufficient for A; "Persian list has candidates"
+  is too weak a gate. It must cover the question's topic structure.
+- Document frequency measured over the candidate pool is biased by the OR
+  query itself and is not a substitute for corpus IDF.
+
+**Next action**
+- Owner review of the branch. Do not merge/tag/deploy without instruction.
+  v0.2.0 reviewed subject layer remains the fix for fa `شراب` (#20) and en
+  "wine" (#7).
+
+---
+
+## 2026-11-01 — Keyword-matching layer (branch `fix/bug-001-v0.1.1`)
+
+Owner report: "so many related keywords do not get matched." The concept layer
+was present but too weak and too noisy to bridge common topics.
+
+**Done**
+- **Concept coverage opt-out.** `searchField` gained `coverage: false`.
+  Concept synonyms are ALTERNATIVES ("forgive", "pardon", "overlook"), not a
+  conjunction; multiplying by the fraction of synonyms matched was pushing
+  the forgiveness verses out of the top 50. Applied to concept lists only.
+- **Persian stemmer** (`persianVariants`): «گان» → «ه», «هاي»/«ها», sound
+  plurals, «گويي», «مي/نمي», and Arabic loanword prefixes. The Arabic
+  prefixes now require a four-letter remainder for the conjunction forms, so
+  «والدین» (parents) no longer stems to «دين» (religion). `arabicStem` got the
+  same guard; the collision was in both fields.
+- **English inflection variants** used for concept-trigger matching too:
+  "tested" now reaches the `trial` concept ("test").
+- **Generic-concept filtering + rarity sort.** «انسان»/«مردم» no longer
+  outrank «توهین»; generic topics (god, human, people, …) are a fallback only
+  when no specific concept matched.
+- **Concept `excludes`** (build-validated): `wine` excludes 24:31 (خُمُر =
+  veils), `gambling` excludes 2:280 (ميسرة = deferment). Filtered in both
+  retrieval paths.
+- **Concept weight 0.1 → 0.5.** Pilot sweep, in-memory hit@5/direct/para/MRR:
+  0.1 40.9/48.0/18.8/0.288; 0.5 **47.0/52.0/31.3/0.381**; 0.7
+  50.0/50.0/50.0/0.402; 1.0 50.0/54.0/37.5/0.401. 0.5 is the mechanism
+  choice (a concept rank-1 ties a literal rank-2); above it, direct topics
+  lose head ranks (prayer 3 → 7) without a monotonic paraphrase gain.
+- **New topics:** `healing` (شفا/درمان; 17:82 now #1 for «درمان»), `gambling`,
+  `modesty`, `arrogance`, `usury`, `backbiting`, `inheritance`, `neighbor`,
+  `wealth`, `speech`, `remembrance`, `insult`; generosity folded into
+  `charity`; «والدین» added to `parents`.
+- **Persian digits in the Persian UI.** Verse refs render as ۱۵:۸۷; hrefs and
+  footnote ids keep the canonical Latin form.
+
+**Verified**
+- `npm test`: **209/209** (new `stem.test.ts`; concept removal/exclusion and
+  canonical-verse tests in `search-quality.test.ts`).
+- Issue set v0.1.1: **6/6 PASS** in both paths.
+- Pilot: in-memory hit@5 **47.0%**, direct **52.0%**, paraphrase **31.3%**,
+  MRR **0.382**; D1 **45.5% / 48.0% / 37.5%**, MRR **0.371**, 10.4 ms/item.
+- Concept ablation at 0.5 (A/D pinned off in both arms): hit@5 28.8% → 45.5%,
+  direct 36.0% → 48.0%, paraphrase 6.3% → 37.5%, MRR 0.217 → 0.365. PASS.
+- Blind set unchanged and **not run**.
+
+**Broke / still open**
+- v0.2.0 issue items still fail as designed: fa «شراب» needs 2:219 at #6–9
+  (5:90/5:91 are in the top 5), en "wine" puts 2:219 at #4 in D1 but the rest
+  of the prohibition cluster at #12–13. One-word sense split is the v0.2.0
+  subject layer, not a synonym tweak.
+- Long verses still lose to short ones on BM25 length normalization: parents
+  («والدین», «پدر و مادر») returns inheritance verses before 17:23; angels/
+  «فرشتگان» never surfaces 2:285. Recorded, not papered over.
+
+**Next action**
+- Owner tests locally. Do not commit/tag/merge/deploy without instruction.
+
+### 2026-11-01 (later) — coverage light-verb fix and final numbers
+
+- At the new concept weight, `ablate:fusion` first **FAILED** its pre-registered
+  rule: paraphrase 37.5% → 31.3% because D demoted fa-p05 («درباره یاد کردن
+  خدا چه می‌گوید؟») from #4 to #6. The cause was «كردن» counting as a coverage
+  group: 12:42 literally contains «ياد كردن از يوسف» and got the full-coverage
+  bonus over 13:28, the verse about remembrance of God.
+- Fix: Persian light verbs (`كردن، كرد، كن، كند، كنم، كنيد، كنند`, and the
+  `مي…` forms) joined `COVERAGE_FRAGMENTS`. They are grammatical glue, not
+  topics. This is the same class of error as the earlier «مردم/وجود/دارد»
+  partial-coverage failure.
+- After the fix: fa-p05 back to #5, fusion acceptance **PASS** (hit@5 45.5 →
+  48.5, direct 48.0 → 52.0, paraphrase 37.5 unchanged, MRR 0.365 → 0.383).
+- Final pilot: in-memory hit@5 **48.5%**, direct **52.0%**, paraphrase
+  **37.5%**, MRR **0.383**; D1 **47.0% / 48.0% / 43.8%**, MRR **0.372**,
+  11.1 ms/item. Issue set v0.1.1: 6/6 both paths. Tests: **210/210**.
+- The weight-sweep line above was measured before this fix; at 0.5 the shipped
+  configuration is now 48.5%, not 47.0%.

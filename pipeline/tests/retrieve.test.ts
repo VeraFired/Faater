@@ -115,3 +115,99 @@ test('results never contain a ref outside the corpus', () => {
     }
   }
 })
+
+// ---------------------------------------------------------------------------
+// BUG-001 — Persian «شراب و قمار» must reach 2:219
+// ---------------------------------------------------------------------------
+
+const rankOf = (hits: Array<{ ref: string }>, ref: string): number | null => {
+  const i = hits.findIndex((h) => h.ref === ref)
+  return i >= 0 ? i + 1 : null
+}
+
+test('a Persian wine-and-gambling question surfaces the prohibition cluster', () => {
+  const hits = retriever.search('شراب و قمار', { limit: 50, language: 'fa' })
+  const top5 = refsOf(hits.slice(0, 5))
+  for (const ref of ['2:219', '5:90', '5:91']) {
+    assert.ok(top5.includes(ref), `${ref} missing from top 5: ${top5.join(', ')}`)
+  }
+})
+
+test('the false friends of wine and gambling stay out of the top 5', () => {
+  // 24:31 is «خُمُر» (veils), not wine; 2:280 is «ميسرة» (deferment), not
+  // gambling. A naive Persian-to-Arabic dictionary imports both.
+  const hits = retriever.search('شراب و قمار', { limit: 50, language: 'fa' })
+  const top5 = refsOf(hits.slice(0, 5))
+  for (const ref of ['24:31', '2:280']) {
+    assert.ok(!top5.includes(ref), `${ref} is a false friend and must not rank: ${top5.join(', ')}`)
+  }
+})
+
+test('a Persian request never ranks 2:219 below an English request', () => {
+  // D alone already lifts 2:219 to rank 3 for both request languages, so this
+  // no longer isolates A. It still guards the direction: the Arabic weight must
+  // never push the target verse down for the language it is meant to help.
+  const fa = retriever.search('شراب و قمار', { limit: 50, language: 'fa' })
+  const en = retriever.search('شراب و قمار', { limit: 50, language: 'en' })
+  const faRank = rankOf(fa, '2:219')
+  const enRank = rankOf(en, '2:219')
+  assert.ok(faRank !== null && enRank !== null)
+  assert.ok(
+    faRank <= enRank,
+    `Persian request ranked 2:219 lower; fa rank ${faRank}, en rank ${enRank}`,
+  )
+})
+
+test('an Arabic-script question in the Persian UI keeps full Arabic weight', () => {
+  // The Persian list finds «ميسر» in 2:280 (deferment) and covers one group;
+  // down-weighting Arabic on that evidence hides 2:219, whose text says
+  // «الخمر». The weight must not fire until Persian covers two query groups.
+  const hits = retriever.search('الخمر والميسر', { limit: 50, language: 'fa' })
+  assert.ok(refsOf(hits.slice(0, 5)).includes('2:219'), refsOf(hits.slice(0, 5)).join(', '))
+})
+
+test('the Arabic weight is a no-op for a single-term Persian query', () => {
+  const fa = retriever.search('شراب', { limit: 50, language: 'fa' })
+  const en = retriever.search('شراب', { limit: 50, language: 'en' })
+  assert.deepEqual(refsOf(fa), refsOf(en))
+})
+
+test('full coverage is required before the coverage bonus applies', () => {
+  // The question shares «مردم», «وجود» and «دارد» with 2:219 — partial overlap
+  // that an earlier multiplier turned into rank 1. No document answers the
+  // whole question, so D must be a no-op and leave BM25's order intact.
+  const on = retriever.search('درباره نحوه سخن گفتن با مردم راهنمایی وجود دارد؟', {
+    limit: 50,
+    language: 'fa',
+  })
+  const off = retriever.search('درباره نحوه سخن گفتن با مردم راهنمایی وجود دارد؟', {
+    limit: 50,
+    language: 'fa',
+    coverageRerank: false,
+  })
+  assert.deepEqual(refsOf(on), refsOf(off))
+})
+
+test('coverage rerank is a no-op for a one-word question', () => {
+  const on = retriever.search('What does the Quran say about fasting?', {
+    limit: 50,
+    language: 'en',
+  })
+  const off = retriever.search('What does the Quran say about fasting?', {
+    limit: 50,
+    language: 'en',
+    coverageRerank: false,
+  })
+  assert.deepEqual(refsOf(on), refsOf(off))
+})
+
+test('the single-word wine query is a known v0.2.0 miss, not a v0.1.1 gate', () => {
+  // A one-term query has no cross-field coverage to compare, so D cannot help
+  // and A does not apply to English. The reviewed subject layer is the fix.
+  // When v0.2.0 lands, this test is expected to change deliberately.
+  const hits = retriever.search('What does the Quran say about wine?', {
+    limit: 5,
+    language: 'en',
+  })
+  assert.ok(!refsOf(hits).includes('2:219'), refsOf(hits).join(', '))
+})

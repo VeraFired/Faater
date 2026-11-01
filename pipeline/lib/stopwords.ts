@@ -30,6 +30,9 @@ export const STOPWORDS_EN: ReadonlySet<string> = new Set([
   'it', 'its', 'they', 'them', 'their', 'theirs',
   'this', 'that', 'these', 'those',
   'what', 'which', 'who', 'whom', 'whose', 'when', 'where', 'why', 'how',
+  // Folded contractions. foldEnglish("what's") is "whats", so the global
+  // stopword "what" alone does not filter the query-side form.
+  'whats',
   'not', 'no', 'nor', 'there', 'here', 'whether', 'own', 'same',
   's', 't', 'don', 'doesn', 'isn', 'aren', 'wasn', 'weren', 'won', 'wouldn',
   // The question frame itself: "what does it SAY ABOUT X". These describe the
@@ -98,6 +101,10 @@ export const STOPWORDS_FA: ReadonlySet<string> = derive(FA_RAW)
  */
 export const FRAME_TERMS: ReadonlySet<string> = new Set([
   'quran', 'koran', 'quraan',
+  // Folded possessives/plurals of the corpus name. "Quran's" becomes "qurans"
+  // before English search, and without these the possessive is a content term
+  // even though its singular is a frame term.
+  'qurans', 'korans', 'quraans', 'alquran',
   // Normalized forms: normalize() folds آ→ا, so these are what reaches search.
   'قران', 'القران',
 ])

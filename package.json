@@ -1,6 +1,6 @@
 {
   "name": "faater",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "Free, public, Qur'an-grounded Q&A system (EN + FA)",
@@ -13,7 +13,9 @@
     "test": "node --test \"pipeline/tests/*.test.ts\" \"worker/tests/*.test.ts\"",
     "eval": "node pipeline/eval.ts",
     "ablate": "node pipeline/tools/ablate.ts",
-    "eval:d1": "node pipeline/tools/eval-d1.ts"
+    "ablate:fusion": "node pipeline/tools/ablate-fusion.ts",
+    "eval:d1": "node pipeline/tools/eval-d1.ts",
+    "eval:issues": "node pipeline/tools/eval-issues.ts"
   },
   "engines": {
     "node": ">=24"
